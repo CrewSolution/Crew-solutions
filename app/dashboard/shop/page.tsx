@@ -30,59 +30,20 @@ import {
   CreditCard,
 } from "lucide-react"
 import Link from "next/link"
-
-interface User {
-  id: string
-  type: string
-  firstName?: string
-  lastName?: string
-  businessName?: string
-  city: string
-  state: string
-  skills?: string[]
-  experienceLevel?: string
-  availability?: string
-  rating?: number
-  jobsCompleted?: number
-  goals?: string
-}
-
-interface JobPosting {
-  id: string
-  title: string
-  description: string
-  apprenticesNeeded: number
-  expectedDuration: string
-  daysNeeded: number
-  startDate: string
-  hoursPerDay: number
-  workDays: string[]
-  payRate: string
-  requirements: string[]
-  requiredSkills: string[]
-  priority: "high" | "medium" | "low"
-  status: "active" | "filled" | "paused"
-  applicants: number
-  postedDate: string
-  totalCost?: number
-  weeklyPayment?: number
-}
-
-interface ActiveJob {
-  id: string
-  title: string
-  apprenticeName: string
-  apprenticeId: string
-  startDate: string
-  daysWorked: number
-  totalDays: number
-  hoursPerDay: number
-  payRate: string
-  status: "in-progress" | "completed"
-  totalHours: number
-  pendingHours: number
-  canComplete: boolean
-}
+import { useToast } from "@/hooks/use-toast"
+import {
+  getCurrentUser,
+  setCurrentUser,
+  getUsers,
+  getJobPostingsByShop,
+  saveJobPosting,
+  getActiveJobsByUser,
+  saveJobInvitation,
+  type User,
+  type JobPosting,
+  type ActiveJob,
+  type JobInvitation,
+} from "@/lib/storage"
 
 const availableSkills = [
   "Basic Electrical Theory",
@@ -98,10 +59,11 @@ const availableSkills = [
 ]
 
 export default function ShopDashboard() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [currentUser, setCurrentUserState] = useState<User | null>(null)
   const [apprentices, setApprentices] = useState<User[]>([])
   const [filteredApprentices, setFilteredApprentices] = useState<User[]>([])
   const [jobPostings, setJobPostings] = useState<JobPosting[]>([])
+  const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [experienceFilter, setExperienceFilter] = useState("all")
   const [availabilityFilter, setAvailabilityFilter] = useState("all")
@@ -122,110 +84,37 @@ export default function ShopDashboard() {
     requiredSkills: [] as string[],
     priority: "medium" as "high" | "medium" | "low",
   })
-  const [activeJobs, setActiveJobs] = useState([
-    {
-      id: "active-1",
-      title: "Residential Wiring Assistant",
-      apprenticeName: "Marcus C.",
-      apprenticeId: "1",
-      startDate: "2025-01-10",
-      daysWorked: 8,
-      totalDays: 10,
-      hoursPerDay: 8,
-      payRate: "$20/hour",
-      status: "in-progress",
-      totalHours: 64,
-      pendingHours: 8,
-      canComplete: true,
-    },
-  ])
   const router = useRouter()
+  const { toast } = useToast()
 
   useEffect(() => {
-    const user = localStorage.getItem("currentUser")
+    const user = getCurrentUser()
     if (!user) {
       router.push("/login")
       return
     }
 
-    const userData = JSON.parse(user)
-    if (userData.type !== "shop") {
+    if (user.type !== "shop") {
       router.push("/login")
       return
     }
 
-    setCurrentUser(userData)
+    setCurrentUserState(user)
 
-    // Load sample data
-    const sampleApprentices = [
-      {
-        id: "1",
-        type: "apprentice",
-        firstName: "Marcus",
-        lastName: "C.",
-        city: "San Francisco",
-        state: "CA",
-        skills: ["Wiring Installation", "Safety Protocols", "Hand Tools"],
-        experienceLevel: "basic-experience",
-        availability: "full-time",
-        rating: 4.8,
-        jobsCompleted: 12,
-      },
-      {
-        id: "2",
-        type: "apprentice",
-        firstName: "Sofia",
-        lastName: "R.",
-        city: "Oakland",
-        state: "CA",
-        skills: ["Basic Electrical Theory", "Circuit Analysis", "Blueprint Reading"],
-        experienceLevel: "some-knowledge",
-        availability: "part-time",
-        rating: 4.6,
-        jobsCompleted: 8,
-      },
-      {
-        id: "3",
-        type: "apprentice",
-        firstName: "David",
-        lastName: "K.",
-        city: "San Jose",
-        state: "CA",
-        skills: ["Motor Controls", "Panel Installation", "Conduit Bending"],
-        experienceLevel: "intermediate",
-        availability: "full-time",
-        rating: 4.9,
-        jobsCompleted: 25,
-      },
-    ]
+    // Load apprentices
+    const allUsers = getUsers()
+    const apprenticeUsers = allUsers.filter((u) => u.type === "apprentice")
+    setApprentices(apprenticeUsers)
+    setFilteredApprentices(apprenticeUsers)
 
-    const sampleJobs = [
-      {
-        id: "1",
-        title: "Residential Wiring Assistant",
-        description: "Help with residential electrical installations and repairs",
-        apprenticesNeeded: 2,
-        expectedDuration: "2 weeks",
-        daysNeeded: 10,
-        startDate: "2025-01-20",
-        hoursPerDay: 8,
-        workDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-        payRate: "$18-22/hour",
-        requirements: ["Basic wiring knowledge", "Safety protocols"],
-        requiredSkills: ["Wiring Installation", "Safety Protocols"],
-        priority: "medium" as const,
-        status: "active" as const,
-        applicants: 5,
-        postedDate: "2025-01-10",
-        totalCost: 3200,
-        weeklyPayment: 1600,
-      },
-    ]
+    // Load job postings
+    const userJobPostings = getJobPostingsByShop(user.id)
+    setJobPostings(userJobPostings)
+    setHasActiveJobs(userJobPostings.length > 0)
 
-    setApprentices(sampleApprentices)
-    setFilteredApprentices(sampleApprentices)
-    setJobPostings(sampleJobs)
-    setHasActiveJobs(sampleJobs.length > 0)
+    // Load active jobs
+    const userActiveJobs = getActiveJobsByUser(user.id, "shop")
+    setActiveJobs(userActiveJobs)
   }, [router])
 
   useEffect(() => {
@@ -252,12 +141,14 @@ export default function ShopDashboard() {
   }, [apprentices, searchTerm, experienceFilter, availabilityFilter])
 
   const handleLogout = () => {
-    localStorage.removeItem("currentUser")
+    setCurrentUser(null)
     router.push("/")
   }
 
   const handleJobSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!currentUser) return
 
     // Calculate costs
     const hourlyRate = Number.parseFloat(newJob.payRate.replace(/[^0-9.-]+/g, "")) || 20
@@ -267,7 +158,8 @@ export default function ShopDashboard() {
       newJob.daysNeeded > 7 ? 7 * newJob.hoursPerDay * newJob.apprenticesNeeded * hourlyRate : totalCost
 
     const job: JobPosting = {
-      id: Date.now().toString(),
+      id: `job-${Date.now()}`,
+      shopId: currentUser.id,
       ...newJob,
       status: "active",
       applicants: 0,
@@ -276,6 +168,7 @@ export default function ShopDashboard() {
       weeklyPayment,
     }
 
+    saveJobPosting(job)
     setJobPostings([job, ...jobPostings])
     setHasActiveJobs(true)
     setShowJobForm(false)
@@ -294,10 +187,47 @@ export default function ShopDashboard() {
       priority: "medium",
     })
 
-    // Simulate sending notifications based on priority
+    toast({
+      title: "Job posted successfully",
+      description: "Your job posting is now live and visible to apprentices",
+    })
+
+    // Auto-send to matching apprentices for high priority jobs
     if (job.priority === "high") {
-      // Auto-send to matching apprentices
-      console.log("Sending high priority job to matching apprentices")
+      const matchingApprentices = apprentices.filter((apprentice) =>
+        apprentice.skills?.some((skill) => job.requiredSkills.includes(skill)),
+      )
+
+      matchingApprentices.forEach((apprentice) => {
+        const invitation: JobInvitation = {
+          id: `invitation-${Date.now()}-${apprentice.id}`,
+          jobPostingId: job.id,
+          shopId: currentUser.id,
+          apprenticeId: apprentice.id,
+          shopName: currentUser.businessName || "Unknown Shop",
+          title: job.title,
+          description: job.description,
+          payRate: job.payRate,
+          daysNeeded: job.daysNeeded,
+          startDate: job.startDate,
+          hoursPerDay: job.hoursPerDay,
+          workDays: job.workDays,
+          requirements: job.requirements,
+          requiredSkills: job.requiredSkills,
+          location: `${currentUser.city}, ${currentUser.state}`,
+          priority: job.priority,
+          totalPay: job.totalCost || 0,
+          weeklyPay: job.weeklyPayment,
+          status: "pending",
+          sentAt: new Date().toISOString(),
+        }
+        saveJobInvitation(invitation)
+      })
+
+      toast({
+        title: "High priority job sent",
+        description: `Automatically sent to ${matchingApprentices.length} matching apprentices`,
+      })
     }
   }
 
@@ -323,6 +253,51 @@ export default function ShopDashboard() {
       return
     }
     // Allow browsing
+  }
+
+  const handleInviteApprentice = (apprentice: User) => {
+    if (!currentUser) return
+
+    // For demo purposes, create a sample job invitation
+    const sampleJob = jobPostings[0] // Use first job posting
+    if (!sampleJob) {
+      toast({
+        title: "No active jobs",
+        description: "Please create a job posting first",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const invitation: JobInvitation = {
+      id: `invitation-${Date.now()}-${apprentice.id}`,
+      jobPostingId: sampleJob.id,
+      shopId: currentUser.id,
+      apprenticeId: apprentice.id,
+      shopName: currentUser.businessName || "Unknown Shop",
+      title: sampleJob.title,
+      description: sampleJob.description,
+      payRate: sampleJob.payRate,
+      daysNeeded: sampleJob.daysNeeded,
+      startDate: sampleJob.startDate,
+      hoursPerDay: sampleJob.hoursPerDay,
+      workDays: sampleJob.workDays,
+      requirements: sampleJob.requirements,
+      requiredSkills: sampleJob.requiredSkills,
+      location: `${currentUser.city}, ${currentUser.state}`,
+      priority: sampleJob.priority,
+      totalPay: sampleJob.totalCost || 0,
+      weeklyPay: sampleJob.weeklyPayment,
+      status: "pending",
+      sentAt: new Date().toISOString(),
+    }
+
+    saveJobInvitation(invitation)
+
+    toast({
+      title: "Invitation sent",
+      description: `Job invitation sent to ${apprentice.firstName} ${apprentice.lastName}`,
+    })
   }
 
   const calculateOwedAmount = () => {
@@ -610,114 +585,122 @@ export default function ShopDashboard() {
                 )}
 
                 <div className="space-y-4">
-                  {jobPostings.map((job) => (
-                    <Card key={job.id}>
-                      <CardHeader>
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <CardTitle className="text-lg flex items-center gap-2">
-                              {job.title}
-                              <Badge
-                                variant={
-                                  job.priority === "high"
-                                    ? "destructive"
-                                    : job.priority === "medium"
-                                      ? "default"
-                                      : "secondary"
-                                }
-                              >
-                                {job.priority} priority
-                              </Badge>
-                            </CardTitle>
-                            <CardDescription>
-                              Posted {new Date(job.postedDate).toLocaleDateString()} • Starts{" "}
-                              {new Date(job.startDate).toLocaleDateString()}
-                            </CardDescription>
-                          </div>
-                          <Badge variant={job.status === "active" ? "default" : "secondary"}>{job.status}</Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground mb-3">{job.description}</p>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm">{job.apprenticesNeeded} needed</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm">{job.daysNeeded} days</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm">{job.hoursPerDay}h/day</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <DollarSign className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm">{job.payRate}</span>
-                          </div>
-                        </div>
-
-                        {job.requiredSkills.length > 0 && (
-                          <div className="mb-3">
-                            <p className="text-sm font-medium mb-2">Required Skills:</p>
-                            <div className="flex flex-wrap gap-1">
-                              {job.requiredSkills.map((skill) => (
-                                <Badge key={skill} variant="outline" className="text-xs">
-                                  {skill}
+                  {jobPostings.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">
+                        No job postings yet. Create your first job posting to get started!
+                      </p>
+                    </div>
+                  ) : (
+                    jobPostings.map((job) => (
+                      <Card key={job.id}>
+                        <CardHeader>
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <CardTitle className="text-lg flex items-center gap-2">
+                                {job.title}
+                                <Badge
+                                  variant={
+                                    job.priority === "high"
+                                      ? "destructive"
+                                      : job.priority === "medium"
+                                        ? "default"
+                                        : "secondary"
+                                  }
+                                >
+                                  {job.priority} priority
                                 </Badge>
-                              ))}
+                              </CardTitle>
+                              <CardDescription>
+                                Posted {new Date(job.postedDate).toLocaleDateString()} • Starts{" "}
+                                {new Date(job.startDate).toLocaleDateString()}
+                              </CardDescription>
+                            </div>
+                            <Badge variant={job.status === "active" ? "default" : "secondary"}>{job.status}</Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm text-muted-foreground mb-3">{job.description}</p>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm">{job.apprenticesNeeded} needed</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm">{job.daysNeeded} days</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm">{job.hoursPerDay}h/day</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <DollarSign className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm">{job.payRate}</span>
                             </div>
                           </div>
-                        )}
 
-                        <div className="flex gap-2 mb-3">
-                          {job.workDays.map((day) => (
-                            <Badge key={day} variant="outline" className="text-xs">
-                              {day.slice(0, 3)}
-                            </Badge>
-                          ))}
-                        </div>
+                          {job.requiredSkills.length > 0 && (
+                            <div className="mb-3">
+                              <p className="text-sm font-medium mb-2">Required Skills:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {job.requiredSkills.map((skill) => (
+                                  <Badge key={skill} variant="outline" className="text-xs">
+                                    {skill}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
-                        {job.totalCost && (
-                          <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg mb-3">
-                            <p className="text-sm">
-                              <strong>Total Cost:</strong> ${job.totalCost.toFixed(2)}
-                              {job.daysNeeded > 7 && (
-                                <span className="text-orange-600 ml-2">
-                                  (Weekly payment: ${job.weeklyPayment?.toFixed(2)})
-                                </span>
-                              )}
-                            </p>
+                          <div className="flex gap-2 mb-3">
+                            {job.workDays.map((day) => (
+                              <Badge key={day} variant="outline" className="text-xs">
+                                {day.slice(0, 3)}
+                              </Badge>
+                            ))}
                           </div>
-                        )}
 
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline">
-                            Edit
-                          </Button>
-                          {job.priority === "medium" && (
-                            <>
-                              <Button size="sm" variant="outline">
-                                Auto-Send to Matches
-                              </Button>
+                          {job.totalCost && (
+                            <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg mb-3">
+                              <p className="text-sm">
+                                <strong>Total Cost:</strong> ${job.totalCost.toFixed(2)}
+                                {job.daysNeeded > 7 && (
+                                  <span className="text-orange-600 ml-2">
+                                    (Weekly payment: ${job.weeklyPayment?.toFixed(2)})
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="outline">
+                              Edit
+                            </Button>
+                            {job.priority === "medium" && (
+                              <>
+                                <Button size="sm" variant="outline">
+                                  Auto-Send to Matches
+                                </Button>
+                                <Button size="sm" variant="outline">
+                                  Browse & Invite
+                                </Button>
+                              </>
+                            )}
+                            {job.priority === "low" && (
                               <Button size="sm" variant="outline">
                                 Browse & Invite
                               </Button>
-                            </>
-                          )}
-                          {job.priority === "low" && (
+                            )}
                             <Button size="sm" variant="outline">
-                              Browse & Invite
+                              {job.status === "active" ? "Pause" : "Activate"}
                             </Button>
-                          )}
-                          <Button size="sm" variant="outline">
-                            {job.status === "active" ? "Pause" : "Activate"}
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -733,6 +716,9 @@ export default function ShopDashboard() {
                 {activeJobs.length === 0 ? (
                   <div className="text-center py-8">
                     <p className="text-muted-foreground">No active jobs at the moment.</p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Active jobs will appear here once apprentices accept your job invitations.
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -771,22 +757,24 @@ export default function ShopDashboard() {
                             </div>
                           </div>
 
-                          <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                            <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
-                              Pending Hour Approval
-                            </p>
-                            <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                              {job.apprenticeName} submitted {job.pendingHours} hours for approval
-                            </p>
-                            <div className="flex gap-2">
-                              <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                                Approve Hours
-                              </Button>
-                              <Button size="sm" variant="outline">
-                                Request Changes
-                              </Button>
+                          {job.pendingHours > 0 && (
+                            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                              <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
+                                Pending Hour Approval
+                              </p>
+                              <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
+                                {job.apprenticeName} submitted {job.pendingHours} hours for approval
+                              </p>
+                              <div className="flex gap-2">
+                                <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                                  Approve Hours
+                                </Button>
+                                <Button size="sm" variant="outline">
+                                  Request Changes
+                                </Button>
+                              </div>
                             </div>
-                          </div>
+                          )}
 
                           <div className="flex gap-2">
                             <Button
@@ -873,7 +861,7 @@ export default function ShopDashboard() {
                           <div className="flex justify-between items-start">
                             <div>
                               <CardTitle className="text-lg">
-                                {apprentice.firstName} {apprentice.lastName}
+                                {apprentice.firstName} {apprentice.lastName?.charAt(0)}.
                               </CardTitle>
                               <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
                                 <MapPin className="h-3 w-3" />
@@ -918,7 +906,7 @@ export default function ShopDashboard() {
                               <Eye className="h-3 w-3 mr-1" />
                               View Profile
                             </Button>
-                            <Button size="sm" variant="outline">
+                            <Button size="sm" variant="outline" onClick={() => handleInviteApprentice(apprentice)}>
                               Invite to Job
                             </Button>
                           </div>
@@ -1027,10 +1015,26 @@ export default function ShopDashboard() {
                     <p className="text-muted-foreground">{currentUser.businessName}</p>
                   </div>
                   <div>
+                    <p className="font-medium">Owner Name</p>
+                    <p className="text-muted-foreground">{currentUser.ownerName}</p>
+                  </div>
+                  <div>
                     <p className="font-medium">Location</p>
                     <p className="text-muted-foreground">
                       {currentUser.city}, {currentUser.state}
                     </p>
+                  </div>
+                  <div>
+                    <p className="font-medium">License Number</p>
+                    <p className="text-muted-foreground">{currentUser.licenseNumber}</p>
+                  </div>
+                  <div>
+                    <p className="font-medium">Phone</p>
+                    <p className="text-muted-foreground">{currentUser.phone}</p>
+                  </div>
+                  <div>
+                    <p className="font-medium">Email</p>
+                    <p className="text-muted-foreground">{currentUser.email}</p>
                   </div>
                 </div>
                 <Button variant="outline">Edit Profile</Button>

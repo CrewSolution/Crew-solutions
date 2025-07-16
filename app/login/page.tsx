@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 
 import { useState } from "react"
 import Link from "next/link"
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Zap, Eye, EyeOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { authenticateUser, setCurrentUser, initializeSampleData } from "@/lib/storage"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -20,18 +21,20 @@ export default function LoginPage() {
   const router = useRouter()
   const { toast } = useToast()
 
+  // Initialize sample data on component mount
+  React.useEffect(() => {
+    initializeSampleData()
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
-    // Simulate API call
-    setTimeout(() => {
-      // Mock authentication - in real app, validate against backend
-      const users = JSON.parse(localStorage.getItem("users") || "[]")
-      const user = users.find((u: any) => u.email === email && u.password === password)
+    try {
+      const user = authenticateUser(email, password)
 
       if (user) {
-        localStorage.setItem("currentUser", JSON.stringify(user))
+        setCurrentUser(user)
         toast({
           title: "Login successful",
           description: "Welcome back!",
@@ -50,8 +53,15 @@ export default function LoginPage() {
           variant: "destructive",
         })
       }
+    } catch (error) {
+      toast({
+        title: "Login error",
+        description: "An error occurred during login",
+        variant: "destructive",
+      })
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
   }
 
   return (
@@ -123,6 +133,18 @@ export default function LoginPage() {
                 {isLoading ? "Signing in..." : "Sign in"}
               </Button>
             </form>
+
+            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Demo Accounts</h3>
+              <div className="space-y-2 text-xs text-blue-700 dark:text-blue-300">
+                <div>
+                  <strong>Shop Owner:</strong> shop@example.com / password123
+                </div>
+                <div>
+                  <strong>Apprentice:</strong> apprentice@example.com / password123
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

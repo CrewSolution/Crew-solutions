@@ -1,14 +1,15 @@
 import type React from "react"
-import "@/app/globals.css"
+import type { Metadata } from "next"
 import { Inter } from "next/font/google"
-import { ThemeProvider } from "@/components/theme-provider"
+import "./globals.css"
+import { Toaster } from "@/components/ui/toaster"
 
 const inter = Inter({ subsets: ["latin"] })
 
-export const metadata = {
-  title: "Crew Solutions - Connecting Electrical Shops with Vetted Apprentices",
+export const metadata: Metadata = {
+  title: "Crew Solutions - Electrical Apprenticeship Platform",
   description:
-    "Crew Solutions connects small electrical businesses with vetted apprentices while handling all the administrative overhead.",
+    "Connecting electrical businesses with vetted apprentices while handling all the administrative overhead.",
     generator: 'v0.dev'
 }
 
@@ -18,11 +19,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          {children}
-        </ThemeProvider>
+        {children}
+        <Toaster />
       </body>
     </html>
   )

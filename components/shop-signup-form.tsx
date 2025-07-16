@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
+import { saveUser, getUsers, setCurrentUser, type User } from "@/lib/storage"
 
 export function ShopSignupForm() {
   const [formData, setFormData] = useState({
@@ -55,20 +56,31 @@ export function ShopSignupForm() {
       return
     }
 
-    // Simulate API call
-    setTimeout(() => {
-      const users = JSON.parse(localStorage.getItem("users") || "[]")
-      const newUser = {
-        id: Date.now().toString(),
+    // Check if email already exists
+    const existingUsers = getUsers()
+    if (existingUsers.some((u) => u.email === formData.email)) {
+      toast({
+        title: "Email already exists",
+        description: "An account with this email already exists",
+        variant: "destructive",
+      })
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      const newUser: User = {
+        id: `shop-${Date.now()}`,
         type: "shop",
         ...formData,
         createdAt: new Date().toISOString(),
         profileComplete: true,
+        rating: 0,
+        jobsCompleted: 0,
       }
 
-      users.push(newUser)
-      localStorage.setItem("users", JSON.stringify(users))
-      localStorage.setItem("currentUser", JSON.stringify(newUser))
+      saveUser(newUser)
+      setCurrentUser(newUser)
 
       toast({
         title: "Account created successfully",
@@ -76,8 +88,15 @@ export function ShopSignupForm() {
       })
 
       router.push("/dashboard/shop")
+    } catch (error) {
+      toast({
+        title: "Error creating account",
+        description: "Please try again later",
+        variant: "destructive",
+      })
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
   }
 
   const handleChange = (field: string, value: string) => {

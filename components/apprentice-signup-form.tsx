@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
+import { saveUser, getUsers, setCurrentUser, type User } from "@/lib/storage"
 
 export function ApprenticeSignupForm() {
   const [formData, setFormData] = useState({
@@ -77,11 +78,21 @@ export function ApprenticeSignupForm() {
       return
     }
 
-    // Simulate API call
-    setTimeout(() => {
-      const users = JSON.parse(localStorage.getItem("users") || "[]")
-      const newUser = {
-        id: Date.now().toString(),
+    // Check if email already exists
+    const existingUsers = getUsers()
+    if (existingUsers.some((u) => u.email === formData.email)) {
+      toast({
+        title: "Email already exists",
+        description: "An account with this email already exists",
+        variant: "destructive",
+      })
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      const newUser: User = {
+        id: `apprentice-${Date.now()}`,
         type: "apprentice",
         ...formData,
         createdAt: new Date().toISOString(),
@@ -90,9 +101,8 @@ export function ApprenticeSignupForm() {
         jobsCompleted: 0,
       }
 
-      users.push(newUser)
-      localStorage.setItem("users", JSON.stringify(users))
-      localStorage.setItem("currentUser", JSON.stringify(newUser))
+      saveUser(newUser)
+      setCurrentUser(newUser)
 
       toast({
         title: "Account created successfully",
@@ -100,8 +110,15 @@ export function ApprenticeSignupForm() {
       })
 
       router.push("/dashboard/apprentice")
+    } catch (error) {
+      toast({
+        title: "Error creating account",
+        description: "Please try again later",
+        variant: "destructive",
+      })
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
   }
 
   const handleChange = (field: string, value: string | boolean | string[]) => {
@@ -408,7 +425,7 @@ export function ApprenticeSignupForm() {
             checked={formData.willingToTravel}
             onCheckedChange={(checked) => handleChange("willingToTravel", checked as boolean)}
           />
-          <Label htmlFor="willingToTravel">Willing to travel for work (within Bay Area)</Label>
+          <Label htmlFor="willingToTravel">Willing to travel for work (within region)</Label>
         </div>
       </div>
 
