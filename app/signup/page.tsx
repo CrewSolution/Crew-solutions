@@ -21,15 +21,15 @@ export default function SignupPage() {
   }, [searchParams])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-yellow-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-2xl w-full space-y-8">
         <div className="text-center">
           <Link href="/" className="flex items-center justify-center gap-2 mb-6">
             <Zap className="h-8 w-8 text-yellow-500" />
-            <span className="text-2xl font-bold">Crew Solutions</span>
+            <span className="text-2xl font-bold text-yellow-600">Crew Solutions</span>
           </Link>
-          <h2 className="text-3xl font-bold">Create your account</h2>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          <h2 className="text-3xl font-bold text-gray-900">Create your account</h2>
+          <p className="mt-2 text-sm text-gray-600">
             Already have an account?{" "}
             <Link href="/login" className="font-medium text-yellow-600 hover:text-yellow-500">
               Sign in here
@@ -37,16 +37,23 @@ export default function SignupPage() {
           </p>
         </div>
 
-        <Card>
+        <Card className="border-yellow-200 shadow-lg">
           <CardHeader>
-            <CardTitle>Join Crew Solutions</CardTitle>
-            <CardDescription>Choose your account type to get started</CardDescription>
+            <CardTitle className="text-yellow-600">Join Crew Solutions</CardTitle>
+            <CardDescription className="text-gray-600">Choose your account type to get started</CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="shop">Shop Owner</TabsTrigger>
-                <TabsTrigger value="apprentice">Apprentice</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2 bg-yellow-100">
+                <TabsTrigger value="shop" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">
+                  Shop Owner
+                </TabsTrigger>
+                <TabsTrigger
+                  value="apprentice"
+                  className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white"
+                >
+                  Apprentice
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="shop" className="mt-6">
                 <ShopSignupForm />

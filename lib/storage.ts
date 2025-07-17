@@ -1,258 +1,238 @@
-import type { User, Job, ActiveJob, Invitation, Review, TimeEntry } from "./types"
+/**
+ * Local-storage demo data layer for Crew Solutions.
+ * Replace with real API/database calls when you wire up a backend.
+ */
 
-// Helper to safely parse JSON from localStorage
-function getParsedItem<T>(key: string, defaultValue: T): T {
-  if (typeof window === "undefined") {
-    return defaultValue
-  }
-  try {
-    const item = localStorage.getItem(key)
-    return item ? JSON.parse(item) : defaultValue
-  } catch (error) {
-    console.error(`Error parsing localStorage key "${key}":`, error)
-    return defaultValue
-  }
+///////////////////////
+// Type Definitions //
+///////////////////////
+export interface User {
+  id: string
+  email: string
+  type: "shop" | "apprentice"
+  firstName?: string
+  lastName?: string
+  phone?: string
+  city?: string
+  state?: string
+  zipCode?: string
+  profileImage?: string
+  rating?: number
+  jobsCompleted?: number
+
+  /* Shop-specific */
+  businessName?: string
+  ownerName?: string
+  businessType?: string
+  yearsInBusiness?: number
+  licenseNumber?: string
+
+  /* Apprentice-specific */
+  experienceLevel?: string
+  skills?: string[]
+  availability?: string
+  hourlyRateMin?: number
+  hourlyRateMax?: number
+  education?: string
+  bio?: string
+  willingToTravel?: boolean
+  hasOwnTools?: boolean
+  hasTransportation?: boolean
 }
 
-// Helper to safely set JSON to localStorage
-function setStringItem(key: string, value: string): void {
-  if (typeof window !== "undefined") {
-    localStorage.setItem(key, value)
-  }
+export interface JobPosting {
+  id: string
+  shopId: string
+  title: string
+  description: string
+  apprenticesNeeded: number
+  expectedDuration?: string
+  daysNeeded: number
+  startDate: string
+  hoursPerDay: number
+  workDays: string[]
+  payRate: string
+  requirements?: string[]
+  requiredSkills?: string[]
+  priority: "high" | "medium" | "low"
+  status: "active" | "filled" | "cancelled"
+  applicants: number
+  postedDate: string
 }
 
-// --- User Management ---
+export interface JobInvitation {
+  id: string
+  jobPostingId: string
+  shopId: string
+  apprenticeId: string
+  shopName: string
+  title: string
+  description: string
+  payRate: string
+  daysNeeded: number
+  startDate: string
+  hoursPerDay: number
+  workDays: string[]
+  requirements?: string[]
+  requiredSkills?: string[]
+  status: "pending" | "accepted" | "declined"
+}
+
+export interface ActiveJob {
+  id: string
+  jobPostingId?: string
+  shopId: string
+  apprenticeId: string
+  title: string
+  shopName: string
+  apprenticeName: string
+  startDate: string
+  totalDays: number
+  hoursPerDay: number
+  payRate: string
+  status: "in-progress" | "completed" | "reviewed"
+  daysWorked: number
+  totalHours: number
+  pendingHours: number
+  canComplete: boolean
+  canSubmitHours: boolean
+}
+
+export interface Review {
+  id: string
+  jobId: string
+  reviewerId: string
+  revieweeId: string
+  reviewerType: "shop" | "apprentice"
+  rating: number
+  comment: string
+  jobTitle: string
+  date: string
+}
+
+export interface TimeEntry {
+  id: string
+  jobId: string
+  apprenticeId: string
+  date: string
+  hours: number
+  approved: boolean
+}
+
+/////////////////////
+// Local-storage 🔑 //
+/////////////////////
 const USERS_KEY = "crew_solutions_users"
 const CURRENT_USER_KEY = "crew_solutions_current_user"
+const JOB_POSTINGS_KEY = "crew_solutions_job_postings"
+const JOB_INVITATIONS_KEY = "crew_solutions_job_invitations"
+const ACTIVE_JOBS_KEY = "crew_solutions_active_jobs"
+const REVIEWS_KEY = "crew_solutions_reviews"
 
-export function getUsers(): User[] {
-  return getParsedItem<User[]>(USERS_KEY, [])
+const isBrowser = () => typeof window !== "undefined"
+
+function readJSON<T>(key: string): T[] {
+  if (!isBrowser()) return []
+  const raw = localStorage.getItem(key)
+  return raw ? (JSON.parse(raw) as T[]) : []
 }
 
-export function setUsers(users: User[]): void {
-  setStringItem(USERS_KEY, JSON.stringify(users))
+function writeJSON<T>(key: string, data: T[]): void {
+  if (isBrowser()) localStorage.setItem(key, JSON.stringify(data))
+}
+
+function uid(): string {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`
+}
+
+//////////////////
+// Auth helpers //
+//////////////////
+export async function authenticateUser(email: string, _password: string): Promise<User | null> {
+  const users = readJSON<User>(USERS_KEY)
+  return users.find((u) => u.email === email) ?? null
 }
 
 export function getCurrentUser(): User | null {
-  return getParsedItem<User | null>(CURRENT_USER_KEY, null)
+  if (!isBrowser()) return null
+  const raw = localStorage.getItem(CURRENT_USER_KEY)
+  return raw ? (JSON.parse(raw) as User) : null
 }
 
 export function setCurrentUser(user: User | null): void {
-  setStringItem(CURRENT_USER_KEY, JSON.stringify(user))
+  if (!isBrowser()) return
+  if (user) localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user))
+  else localStorage.removeItem(CURRENT_USER_KEY)
 }
 
-export function authenticateUser(email: string, passwordHash: string): User | null {
-  const users = getUsers()
-  const user = users.find((u) => u.email === email && u.passwordHash === passwordHash)
-  if (user) {
-    setCurrentUser(user)
-    return user
-  }
-  return null
+/////////////////////////
+// Sample-data seeding //
+/////////////////////////
+export function initializeSampleData(): void {
+  if (!isBrowser()) return
+  if (readJSON<User>(USERS_KEY).length) return
+
+  const sampleUsers: User[] = [
+    {
+      id: "shop-1",
+      email: "shop@example.com",
+      type: "shop",
+      businessName: "Elite Electrical Services",
+      ownerName: "John Smith",
+      firstName: "John",
+      lastName: "Smith",
+      phone: "(555) 123-4567",
+      city: "San Francisco",
+      state: "CA",
+      zipCode: "94102",
+      businessType: "Electrical Contractor",
+      yearsInBusiness: 15,
+      licenseNumber: "C-10 #123456",
+      rating: 4.8,
+      jobsCompleted: 127,
+    },
+    {
+      id: "apprentice-1",
+      email: "apprentice@example.com",
+      type: "apprentice",
+      firstName: "Sarah",
+      lastName: "Johnson",
+      phone: "(555) 987-6543",
+      city: "Oakland",
+      state: "CA",
+      zipCode: "94601",
+      experienceLevel: "Intermediate",
+      skills: ["Wiring Installation", "Circuit Analysis", "Blueprint Reading", "Safety Protocols"],
+      availability: "Full-time",
+      hourlyRateMin: 22,
+      hourlyRateMax: 28,
+      education: "Community College Electrical Program",
+      bio: "Dedicated electrical apprentice with 2 years of hands-on experience in residential and commercial projects.",
+      rating: 4.6,
+      jobsCompleted: 23,
+      willingToTravel: true,
+      hasOwnTools: true,
+      hasTransportation: true,
+    },
+  ]
+
+  writeJSON(USERS_KEY, sampleUsers)
 }
 
-export function registerUser(user: User): boolean {
-  const users = getUsers()
-  if (users.some((u) => u.email === user.email)) {
-    return false // User with this email already exists
-  }
-  setUsers([...users, user])
-  return true
+////////////////////////////////////
+// Minimal stubs for future CRUDs //
+////////////////////////////////////
+export const createUser = async (user: Omit<User, "id">): Promise<User> => {
+  const users = readJSON<User>(USERS_KEY)
+  if (users.some((u) => u.email === user.email)) throw new Error("Email already exists")
+
+  const newUser: User = { ...user, id: uid(), rating: 0, jobsCompleted: 0 }
+  users.push(newUser)
+  writeJSON(USERS_KEY, users)
+  return newUser
 }
 
-export function logoutUser(): void {
-  setCurrentUser(null)
-}
-
-// --- Job Management ---
-const JOBS_KEY = "crew_solutions_jobs"
-
-export function getJobs(): Job[] {
-  return getParsedItem<Job[]>(JOBS_KEY, [])
-}
-
-export function setJobs(jobs: Job[]): void {
-  setStringItem(JOBS_KEY, JSON.stringify(jobs))
-}
-
-// --- Active Job Management ---
-const ACTIVE_JOBS_KEY = "crew_solutions_active_jobs"
-
-export function getActiveJobs(): ActiveJob[] {
-  return getParsedItem<ActiveJob[]>(ACTIVE_JOBS_KEY, [])
-}
-
-export function setActiveJobs(activeJobs: ActiveJob[]): void {
-  setStringItem(ACTIVE_JOBS_KEY, JSON.stringify(activeJobs))
-}
-
-// --- Invitation Management ---
-const INVITATIONS_KEY = "crew_solutions_invitations"
-
-export function getInvitations(): Invitation[] {
-  return getParsedItem<Invitation[]>(INVITATIONS_KEY, [])
-}
-
-export function setInvitations(invitations: Invitation[]): void {
-  setStringItem(INVITATIONS_KEY, JSON.stringify(invitations))
-}
-
-// --- Review Management ---
-const REVIEWS_KEY = "crew_solutions_reviews"
-
-export function getReviews(): Review[] {
-  return getParsedItem<Review[]>(REVIEWS_KEY, [])
-}
-
-export function setReviews(reviews: Review[]): void {
-  setStringItem(REVIEWS_KEY, JSON.stringify(reviews))
-}
-
-// --- Time Entry Management ---
-const TIME_ENTRIES_KEY = "crew_solutions_time_entries"
-
-export function getTimeEntries(): TimeEntry[] {
-  return getParsedItem<TimeEntry[]>(TIME_ENTRIES_KEY, [])
-}
-
-export function setTimeEntries(timeEntries: TimeEntry[]): void {
-  setStringItem(TIME_ENTRIES_KEY, JSON.stringify(timeEntries))
-}
-
-// --- Sample Data Initialization ---
-export function initializeSampleData() {
-  if (getUsers().length === 0) {
-    const sampleUsers: User[] = [
-      {
-        id: "shop-1",
-        email: "shop@example.com",
-        passwordHash: "password", // In a real app, hash this!
-        type: "shop",
-        name: "Electric Co.",
-        contactEmail: "contact@electricco.com",
-        phone: "555-123-4567",
-        address: "123 Main St, Anytown, USA",
-        description: "A leading electrical contracting company.",
-        profileImage: "/placeholder.svg",
-      },
-      {
-        id: "apprentice-1",
-        email: "apprentice@example.com",
-        passwordHash: "password", // In a real app, hash this!
-        type: "apprentice",
-        firstName: "Alice",
-        lastName: "Smith",
-        skills: ["Wiring", "Troubleshooting"],
-        experienceLevel: "Intermediate",
-        availability: "Full-time",
-        city: "Anytown",
-        state: "USA",
-        bio: "Dedicated electrical apprentice with 2 years of experience.",
-        profileImage: "/placeholder.svg",
-      },
-      {
-        id: "apprentice-2",
-        email: "apprentice2@example.com",
-        passwordHash: "password", // In a real app, hash this!
-        type: "apprentice",
-        firstName: "Bob",
-        lastName: "Johnson",
-        skills: ["Conduit Bending", "Panel Installation"],
-        experienceLevel: "Basic",
-        availability: "Part-time",
-        city: "Anytown",
-        state: "USA",
-        bio: "Eager to learn and grow in the electrical trade.",
-        profileImage: "/placeholder.svg",
-      },
-    ]
-    setUsers(sampleUsers)
-  }
-
-  if (getJobs().length === 0) {
-    const sampleJobs: Job[] = [
-      {
-        id: "job-1",
-        shopId: "shop-1",
-        title: "Residential Wiring Upgrade",
-        description: "Need an apprentice for a full house wiring upgrade.",
-        requiredSkills: ["Wiring", "Safety Protocols"],
-        location: "Anytown, USA",
-        budget: 1500,
-        status: "open",
-        postedDate: new Date().toISOString(),
-      },
-      {
-        id: "job-2",
-        shopId: "shop-1",
-        title: "Commercial Lighting Installation",
-        description: "Apprentice needed for new office lighting setup.",
-        requiredSkills: ["Blueprint Reading", "Panel Installation"],
-        location: "Anytown, USA",
-        budget: 2000,
-        status: "open",
-        postedDate: new Date().toISOString(),
-      },
-    ]
-    setJobs(sampleJobs)
-  }
-
-  if (getActiveJobs().length === 0) {
-    const sampleActiveJobs: ActiveJob[] = [
-      {
-        id: "active-job-1",
-        jobId: "job-1",
-        shopId: "shop-1",
-        apprenticeId: "apprentice-1",
-        status: "in-progress",
-        startDate: new Date().toISOString(),
-        hourlyRate: 25,
-      },
-    ]
-    setActiveJobs(sampleActiveJobs)
-  }
-
-  if (getInvitations().length === 0) {
-    const sampleInvitations: Invitation[] = [
-      {
-        id: "invitation-1",
-        jobId: "job-2",
-        shopId: "shop-1",
-        apprenticeId: "apprentice-2",
-        status: "pending",
-        message: "We would like to invite you to work on our commercial lighting project.",
-        sentDate: new Date().toISOString(),
-      },
-    ]
-    setInvitations(sampleInvitations)
-  }
-
-  if (getReviews().length === 0) {
-    const sampleReviews: Review[] = [
-      {
-        id: "review-1",
-        jobId: "job-1",
-        reviewerId: "shop-1",
-        revieweeId: "apprentice-1",
-        rating: 4.5,
-        comment: "Alice did a great job on the residential wiring upgrade. Very professional!",
-        date: new Date().toISOString(),
-      },
-    ]
-    setReviews(sampleReviews)
-  }
-
-  if (getTimeEntries().length === 0) {
-    const sampleTimeEntries: TimeEntry[] = [
-      {
-        id: "time-entry-1",
-        activeJobId: "active-job-1",
-        apprenticeId: "apprentice-1",
-        date: new Date().toISOString().split("T")[0], // YYYY-MM-DD
-        hours: 8,
-        description: "Full day on residential wiring.",
-      },
-    ]
-    setTimeEntries(sampleTimeEntries)
-  }
+// Initialize sample data when module loads
+if (isBrowser()) {
+  initializeSampleData()
 }
