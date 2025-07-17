@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,63 +28,32 @@ import {
   CreditCard,
 } from "lucide-react"
 import Link from "next/link"
-
-interface Apprentice {
-  id: string
-  type: string
-  firstName?: string
-  lastName?: string
-  businessName?: string
-  city: string
-  state: string
-  skills?: string[]
-  experienceLevel?: string
-  availability?: string
-  rating?: number
-  jobsCompleted?: number
-  goals?: string
-  hoursCompleted?: string
-  profileImage?: string
-  bio?: string
-  phone?: string
-  email?: string
-}
-
-interface JobInvitation {
-  id: string
-  shopName: string
-  title: string
-  description: string
-  payRate: string
-  daysNeeded: number
-  startDate: string
-  hoursPerDay: number
-  workDays: string[]
-  requirements: string[]
-  requiredSkills: string[]
-  location: string
-  priority: "high" | "medium" | "low"
-  totalPay: number
-  weeklyPay?: number
-}
-
-interface Review {
-  id: string
-  shopName: string
-  rating: number
-  comment: string
-  jobTitle: string
-  date: string
-}
+import { useToast } from "@/hooks/use-toast"
+import {
+  getCurrentUser,
+  setCurrentUser,
+  getJobInvitations as fetchJobInvitations,
+  updateJobInvitationStatus,
+  getActiveJobs as fetchActiveJobs,
+  createActiveJob,
+  getReviews as fetchReviews,
+  createTimeEntry,
+  updateActiveJob,
+  updateUser,
+  type Apprentice,
+  type JobInvitation,
+  type Review,
+  type ActiveJob,
+} from "@/lib/storage"
 
 export default function ApprenticeDashboard() {
-  const [currentUser, setCurrentUser] = useState<Apprentice | null>(null)
+  const [currentUser, setCurrentUserState] = useState<Apprentice | null>(null)
   const [incomingJobs, setIncomingJobs] = useState<JobInvitation[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
   const [selectedJob, setSelectedJob] = useState<JobInvitation | null>(null)
   const [showJobDetails, setShowJobDetails] = useState(false)
-  const [totalEarnings, setTotalEarnings] = useState(2450.75)
-  const [pendingPay, setPendingPay] = useState(320.0)
+  const [totalEarnings, setTotalEarnings] = useState(0)
+  const [pendingPay, setPendingPay] = useState(0)
   const [profileData, setProfileData] = useState({
     bio: "",
     profileImage: "",
@@ -93,112 +62,74 @@ export default function ApprenticeDashboard() {
     bankAccount: "",
     routingNumber: "",
   })
-  const [activeJobs, setActiveJobs] = useState([
-    {
-      id: "active-1",
-      title: "Residential Wiring Assistant",
-      shopName: "Bay Area Electric Co.",
-      shopId: "shop-1",
-      startDate: "2025-01-10",
-      daysWorked: 8,
-      totalDays: 10,
-      hoursPerDay: 8,
-      payRate: "$20/hour",
-      status: "in-progress",
-      totalHours: 64,
-      todayHours: 0,
-      canSubmitHours: true,
-      canComplete: true,
-    },
-  ])
+  const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([])
   const [todayHours, setTodayHours] = useState("")
   const router = useRouter()
+  const { toast } = useToast()
 
-  useEffect(() => {
-    const user = localStorage.getItem("currentUser")
+  const loadDashboardData = useCallback(async () => {
+    const user = getCurrentUser()
     if (!user) {
       router.push("/login")
       return
     }
 
-    const userData = JSON.parse(user)
-    if (userData.type !== "apprentice") {
+    if (user.type !== "apprentice") {
       router.push("/login")
       return
     }
 
-    setCurrentUser(userData)
+    setCurrentUserState(user)
     setProfileData({
-      bio: userData.bio || "",
-      profileImage: userData.profileImage || "",
-      phone: userData.phone || "",
-      email: userData.email || "",
-      bankAccount: userData.bankAccount || "",
-      routingNumber: userData.routingNumber || "",
+      bio: user.bio || "",
+      profileImage: user.profileImage || "",
+      phone: user.phone || "",
+      email: user.email || "",
+      bankAccount: user.bankAccount || "",
+      routingNumber: user.routingNumber || "",
     })
 
-    // Sample incoming jobs
-    const sampleIncomingJobs = [
-      {
-        id: "1",
-        shopName: "Express Electric",
-        title: "Emergency Repair Assistant",
-        description: "Urgent electrical repair needed for commercial building. Must be available immediately.",
-        payRate: "$25/hour",
-        daysNeeded: 2,
-        startDate: "2025-01-16",
-        hoursPerDay: 8,
-        workDays: ["Monday", "Tuesday"],
-        requirements: ["Available immediately", "Basic electrical knowledge"],
-        requiredSkills: ["Safety Protocols", "Hand Tools"],
-        location: "San Jose, CA",
-        priority: "high" as const,
-        totalPay: 400,
-      },
-      {
-        id: "2",
-        shopName: "Bay Area Electric Co.",
-        title: "Residential Wiring Project",
-        description: "Help with residential electrical installations in new construction homes.",
-        payRate: "$22/hour",
-        daysNeeded: 10,
-        startDate: "2025-01-20",
-        hoursPerDay: 8,
-        workDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-        requirements: ["Wiring experience preferred", "Own transportation"],
-        requiredSkills: ["Wiring Installation", "Blueprint Reading"],
-        location: "San Francisco, CA",
-        priority: "medium" as const,
-        totalPay: 1760,
-        weeklyPay: 880,
-      },
-    ]
+    try {
+      // Fetch incoming job invitations
+      const invitations = await fetchJobInvitations(user.id, "pending")
+      setIncomingJobs(invitations)
 
-    const sampleReviews = [
-      {
-        id: "1",
-        shopName: "ABC Electrical",
-        rating: 5,
-        comment: "Excellent work ethic and quick learner. Very reliable and safety-conscious.",
-        jobTitle: "Wiring Assistant",
-        date: "2025-01-05",
-      },
-      {
-        id: "2",
-        shopName: "Power Solutions Inc.",
-        rating: 4,
-        comment: "Good technical skills and follows instructions well. Would hire again.",
-        jobTitle: "Panel Installation Helper",
-        date: "2024-12-20",
-      },
-    ]
+      // Fetch active jobs
+      const activeJobsData = await fetchActiveJobs(user.id, "apprentice")
+      setActiveJobs(activeJobsData.filter((job) => job.status === "in-progress"))
 
-    setIncomingJobs(sampleIncomingJobs)
-    setReviews(sampleReviews)
-  }, [router])
+      // Fetch reviews
+      const userReviews = await fetchReviews(user.id, true)
+      setReviews(userReviews)
+
+      // Calculate earnings (simplified for demo)
+      const completedJobs = activeJobsData.filter((job) => job.status === "completed" || job.status === "reviewed")
+      const totalEarned = completedJobs.reduce(
+        (sum, job) => sum + Number.parseFloat(job.payRate.replace(/[^0-9.]/g, "")) * job.totalHours,
+        0,
+      )
+      setTotalEarnings(totalEarned)
+
+      const pendingHoursAcrossJobs = activeJobsData.reduce((sum, job) => sum + job.pendingHours, 0)
+      const estimatedPendingPay =
+        pendingHoursAcrossJobs * (Number.parseFloat(activeJobsData[0]?.payRate.replace(/[^0-9.]/g, "")) || 0) // Assuming same pay rate for simplicity
+      setPendingPay(estimatedPendingPay)
+    } catch (error) {
+      console.error("Failed to load dashboard data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load dashboard data. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }, [router, toast])
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [loadDashboardData])
 
   const handleLogout = () => {
-    localStorage.removeItem("currentUser")
+    setCurrentUser(null)
     router.push("/")
   }
 
@@ -207,24 +138,151 @@ export default function ApprenticeDashboard() {
     setShowJobDetails(true)
   }
 
-  const handleAcceptJob = (jobId: string) => {
-    setIncomingJobs((prev) => prev.filter((job) => job.id !== jobId))
-    setShowJobDetails(false)
-    setSelectedJob(null)
-    // In real app, this would create a work session and time tracking
+  const handleAcceptJob = async (jobInvitation: JobInvitation) => {
+    if (!currentUser) return
+
+    try {
+      // Update invitation status
+      await updateJobInvitationStatus(jobInvitation.id, "accepted")
+
+      // Create an active job entry
+      const newActiveJob: Omit<ActiveJob, "id"> = {
+        jobPostingId: jobInvitation.jobPostingId,
+        shopId: jobInvitation.shopId,
+        apprenticeId: currentUser.id,
+        title: jobInvitation.title,
+        shopName: jobInvitation.shopName,
+        apprenticeName: `${currentUser.firstName} ${currentUser.lastName}`,
+        startDate: jobInvitation.startDate,
+        totalDays: jobInvitation.daysNeeded,
+        hoursPerDay: jobInvitation.hoursPerDay,
+        payRate: jobInvitation.payRate,
+        status: "in-progress",
+        daysWorked: 0,
+        totalHours: 0,
+        pendingHours: 0,
+        canComplete: false, // Will be true when totalDays are met
+        canSubmitHours: true,
+      }
+      await createActiveJob(newActiveJob)
+
+      toast({
+        title: "Job Accepted!",
+        description: `You have accepted the job: ${jobInvitation.title}. It's now in your Active Jobs.`,
+      })
+
+      setShowJobDetails(false)
+      setSelectedJob(null)
+      loadDashboardData() // Reload data to update active jobs and incoming jobs
+    } catch (error) {
+      console.error("Failed to accept job:", error)
+      toast({
+        title: "Error",
+        description: "Failed to accept job. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handleDeclineJob = (jobId: string) => {
-    setIncomingJobs((prev) => prev.filter((job) => job.id !== jobId))
-    setShowJobDetails(false)
-    setSelectedJob(null)
+  const handleDeclineJob = async (jobId: string) => {
+    try {
+      await updateJobInvitationStatus(jobId, "declined")
+      toast({
+        title: "Job Declined",
+        description: "The job invitation has been declined.",
+      })
+      setShowJobDetails(false)
+      setSelectedJob(null)
+      loadDashboardData() // Reload data to remove the declined job
+    } catch (error) {
+      console.error("Failed to decline job:", error)
+      toast({
+        title: "Error",
+        description: "Failed to decline job. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleSubmitHours = async (job: ActiveJob) => {
+    if (!currentUser || !todayHours || Number.parseFloat(todayHours) <= 0) {
+      toast({
+        title: "Invalid Hours",
+        description: "Please enter a valid number of hours.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const hours = Number.parseFloat(todayHours)
+      const newTimeEntry = await createTimeEntry({
+        jobId: job.id,
+        apprenticeId: currentUser.id,
+        date: new Date().toISOString().split("T")[0],
+        hours: hours,
+        approved: false,
+      })
+
+      // Update active job's pending hours and total hours
+      const updatedPendingHours = job.pendingHours + hours
+      const updatedTotalHours = job.totalHours + hours
+      const updatedDaysWorked = job.daysWorked + 1 // Assuming 1 entry per day
+
+      await updateActiveJob(job.id, {
+        pendingHours: updatedPendingHours,
+        totalHours: updatedTotalHours,
+        daysWorked: updatedDaysWorked,
+        canComplete: updatedDaysWorked >= job.totalDays, // Allow completion if days met
+      })
+
+      toast({
+        title: "Hours Submitted",
+        description: `${hours} hours submitted for approval.`,
+      })
+      setTodayHours("")
+      loadDashboardData() // Reload data to reflect changes
+    } catch (error) {
+      console.error("Failed to submit hours:", error)
+      toast({
+        title: "Error",
+        description: "Failed to submit hours. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleSaveProfileChanges = async () => {
+    if (!currentUser) return
+    try {
+      const updatedUser = await updateUser(currentUser.id, {
+        bio: profileData.bio,
+        profileImage: profileData.profileImage,
+        phone: profileData.phone,
+        email: profileData.email,
+        bankAccount: profileData.bankAccount,
+        routingNumber: profileData.routingNumber,
+      })
+      setCurrentUser(updatedUser) // Update local state and localStorage
+      toast({
+        title: "Profile Updated",
+        description: "Your profile information has been saved.",
+      })
+    } catch (error) {
+      console.error("Failed to update profile:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update profile. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   if (!currentUser) {
     return <div>Loading...</div>
   }
 
-  const hoursCompleted = Number.parseInt(currentUser.hoursCompleted || "0")
+  const hoursCompleted = Number.parseInt(currentUser.hoursCompleted?.toString() || "0")
   const hoursNeeded = 8000 // Typical apprenticeship requirement
   const progressPercentage = Math.min((hoursCompleted / hoursNeeded) * 100, 100)
   const averageRating =
@@ -367,10 +425,7 @@ export default function ApprenticeDashboard() {
               </div>
 
               <div className="flex gap-2 pt-2">
-                <Button
-                  className="flex-1 bg-green-600 hover:bg-green-700"
-                  onClick={() => handleAcceptJob(selectedJob.id)}
-                >
+                <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={() => handleAcceptJob(selectedJob)}>
                   Accept Job
                 </Button>
                 <Button
@@ -553,7 +608,9 @@ export default function ApprenticeDashboard() {
                             </div>
                             <div>
                               <p className="text-sm font-medium">Earnings</p>
-                              <p className="text-sm text-green-600">${(job.totalHours * 20).toFixed(2)}</p>
+                              <p className="text-sm text-green-600">
+                                ${(Number.parseFloat(job.payRate.replace(/[^0-9.]/g, "")) * job.totalHours).toFixed(2)}
+                              </p>
                             </div>
                           </div>
 
@@ -582,6 +639,7 @@ export default function ApprenticeDashboard() {
                                 size="sm"
                                 className="bg-green-600 hover:bg-green-700"
                                 disabled={!todayHours || !job.canSubmitHours}
+                                onClick={() => handleSubmitHours(job)}
                               >
                                 Submit Hours
                               </Button>
@@ -682,7 +740,7 @@ export default function ApprenticeDashboard() {
                         />
                       </div>
                     </div>
-                    <Button>Update Banking Information</Button>
+                    <Button onClick={handleSaveProfileChanges}>Update Banking Information</Button>
                   </CardContent>
                 </Card>
 
@@ -810,7 +868,7 @@ export default function ApprenticeDashboard() {
                   <Input id="availability" value={currentUser.availability?.replace("-", " ") || "Flexible"} readOnly />
                 </div>
 
-                <Button>Save Profile Changes</Button>
+                <Button onClick={handleSaveProfileChanges}>Save Profile Changes</Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -828,8 +886,10 @@ export default function ApprenticeDashboard() {
                       <CardHeader>
                         <div className="flex justify-between items-start">
                           <div>
-                            <CardTitle className="text-lg">{review.shopName}</CardTitle>
-                            <CardDescription>{review.jobTitle}</CardDescription>
+                            <CardTitle className="text-lg">{review.jobTitle}</CardTitle>
+                            <CardDescription>
+                              {review.reviewerType === "shop" ? "Shop Review" : "Apprentice Review"}
+                            </CardDescription>
                           </div>
                           <div className="flex items-center gap-1">
                             {[...Array(5)].map((_, i) => (

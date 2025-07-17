@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,56 +20,31 @@ import {
   Star,
   MapPin,
 } from "lucide-react"
-
-const apprenticeProfiles = [
-  {
-    id: 1,
-    name: "Marcus C.",
-    age: 24,
-    location: "San Francisco, CA",
-    experience: "Basic Experience",
-    rating: 4.8,
-    skills: ["Wiring Installation", "Safety Protocols", "Hand Tools"],
-    availability: "Full-time",
-    image: "/placeholder.svg?height=200&width=200",
-  },
-  {
-    id: 2,
-    name: "Sofia R.",
-    age: 22,
-    location: "Oakland, CA",
-    experience: "Some Knowledge",
-    rating: 4.6,
-    skills: ["Basic Electrical Theory", "Circuit Analysis", "Blueprint Reading"],
-    availability: "Part-time",
-    image: "/placeholder.svg?height=200&width=200",
-  },
-  {
-    id: 3,
-    name: "David K.",
-    age: 26,
-    location: "San Jose, CA",
-    experience: "Intermediate",
-    rating: 4.9,
-    skills: ["Motor Controls", "Panel Installation", "Conduit Bending"],
-    availability: "Full-time",
-    image: "/placeholder.svg?height=200&width=200",
-  },
-  {
-    id: 4,
-    name: "Ashley T.",
-    age: 23,
-    location: "Fremont, CA",
-    experience: "Basic Experience",
-    rating: 4.7,
-    skills: ["Wiring Installation", "Power Tools", "Safety Protocols"],
-    availability: "Flexible",
-    image: "/placeholder.svg?height=200&width=200",
-  },
-]
+import { getUsers, type User } from "@/lib/storage"
+import { useToast } from "@/hooks/use-toast"
 
 export default function Home() {
+  const [apprenticeProfiles, setApprenticeProfiles] = useState<User[]>([])
   const [currentProfileIndex, setCurrentProfileIndex] = useState(0)
+  const { toast } = useToast()
+
+  const loadApprentices = useCallback(async () => {
+    try {
+      const apprentices = await getUsers("apprentice")
+      setApprenticeProfiles(apprentices)
+    } catch (error) {
+      console.error("Failed to load apprentice profiles:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load apprentice profiles. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }, [toast])
+
+  useEffect(() => {
+    loadApprentices()
+  }, [loadApprentices])
 
   const nextProfile = () => {
     setCurrentProfileIndex((prev) => (prev + 1) % apprenticeProfiles.length)
@@ -79,7 +54,7 @@ export default function Home() {
     setCurrentProfileIndex((prev) => (prev - 1 + apprenticeProfiles.length) % apprenticeProfiles.length)
   }
 
-  const currentProfile = apprenticeProfiles[currentProfileIndex]
+  const currentProfile = apprenticeProfiles[currentProfileIndex] || null
 
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId)
@@ -173,6 +148,7 @@ export default function Home() {
                     size="icon"
                     className="absolute left-0 top-1/2 transform -translate-y-1/2 z-10 bg-white shadow-lg"
                     onClick={prevProfile}
+                    disabled={apprenticeProfiles.length === 0}
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
@@ -181,59 +157,75 @@ export default function Home() {
                     size="icon"
                     className="absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-white shadow-lg"
                     onClick={nextProfile}
+                    disabled={apprenticeProfiles.length === 0}
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
 
                   {/* Profile Card */}
-                  <Card className="mx-8 shadow-lg">
-                    <CardHeader className="text-center pb-2">
-                      <img
-                        src={currentProfile.image || "/placeholder.svg"}
-                        alt={currentProfile.name}
-                        className="w-24 h-24 rounded-full mx-auto mb-3 object-cover"
-                      />
-                      <CardTitle className="text-xl">{currentProfile.name}</CardTitle>
-                      <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground">
-                        <MapPin className="h-3 w-3" />
-                        {currentProfile.location}
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Badge variant="secondary">{currentProfile.experience}</Badge>
-                        <div className="flex items-center gap-1">
-                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          <span className="text-sm font-medium">{currentProfile.rating}</span>
+                  {currentProfile ? (
+                    <Card className="mx-8 shadow-lg">
+                      <CardHeader className="text-center pb-2">
+                        <img
+                          src={currentProfile.profileImage || "/placeholder.svg?height=200&width=200"}
+                          alt={currentProfile.firstName + " " + currentProfile.lastName?.charAt(0) + "."}
+                          className="w-24 h-24 rounded-full mx-auto mb-3 object-cover"
+                        />
+                        <CardTitle className="text-xl">
+                          {currentProfile.firstName} {currentProfile.lastName?.charAt(0)}.
+                        </CardTitle>
+                        <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                          <MapPin className="h-3 w-3" />
+                          {currentProfile.city}, {currentProfile.state}
                         </div>
-                      </div>
-
-                      <div>
-                        <p className="text-sm font-medium mb-2">Skills:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {currentProfile.skills.map((skill) => (
-                            <Badge key={skill} variant="outline" className="text-xs">
-                              {skill}
-                            </Badge>
-                          ))}
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Badge variant="secondary">{currentProfile.experienceLevel?.replace("-", " ")}</Badge>
+                          <div className="flex items-center gap-1">
+                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                            <span className="text-sm font-medium">{currentProfile.rating?.toFixed(1) || "New"}</span>
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="flex items-center gap-2 text-sm">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span>{currentProfile.availability}</span>
-                      </div>
+                        <div>
+                          <p className="text-sm font-medium mb-2">Skills:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {currentProfile.skills?.slice(0, 3).map((skill) => (
+                              <Badge key={skill} variant="outline" className="text-xs">
+                                {skill}
+                              </Badge>
+                            ))}
+                            {(currentProfile.skills?.length || 0) > 3 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{(currentProfile.skills?.length || 0) - 3} more
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
 
-                      <div className="flex gap-2 pt-2">
-                        <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700">
-                          View Profile
-                        </Button>
-                        <Button size="sm" variant="outline" className="flex-1 bg-transparent">
-                          Pass
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                        <div className="flex items-center gap-2 text-sm">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <span>{currentProfile.availability?.replace("-", " ")}</span>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                          <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700">
+                            View Profile
+                          </Button>
+                          <Button size="sm" variant="outline" className="flex-1 bg-transparent">
+                            Pass
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Card className="mx-8 shadow-lg h-[380px] flex items-center justify-center">
+                      <CardContent className="text-center text-muted-foreground">
+                        No apprentices available yet.
+                      </CardContent>
+                    </Card>
+                  )}
 
                   {/* Profile Indicators */}
                   <div className="flex justify-center gap-2 mt-4">
@@ -256,7 +248,7 @@ export default function Home() {
                     <span className="font-medium">Perfect Match!</span>
                   </div>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                    {currentProfile.name} matches 94% of your requirements
+                    {currentProfile?.firstName} {currentProfile?.lastName?.charAt(0)}. matches 94% of your requirements
                   </p>
                   <Button size="sm" className="w-full bg-green-600 hover:bg-green-700 text-white">
                     View Profile

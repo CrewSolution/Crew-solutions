@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,65 +10,140 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Star, ArrowLeft, Zap } from "lucide-react"
 import Link from "next/link"
+import { useToast } from "@/hooks/use-toast"
+import {
+  getCurrentUser,
+  getActiveJobById,
+  createReview,
+  updateActiveJob,
+  updateUser,
+  type User,
+  type ActiveJob,
+} from "@/lib/storage"
 
 export default function JobReviewPage() {
   const router = useRouter()
   const params = useParams()
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [jobData, setJobData] = useState<any>(null)
+  const jobId = params.id as string
+  const [currentUser, setCurrentUserState] = useState<User | null>(null)
+  const [jobData, setJobData] = useState<ActiveJob | null>(null)
+  const [shopUser, setShopUser] = useState<User | null>(null) // To get shop's full name
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const { toast } = useToast()
 
-  useEffect(() => {
-    const user = localStorage.getItem("currentUser")
+  const loadJobAndUser = useCallback(async () => {
+    const user = getCurrentUser()
     if (!user) {
       router.push("/login")
       return
     }
+    setCurrentUserState(user)
 
-    const userData = JSON.parse(user)
-    setCurrentUser(userData)
-
-    // Mock job data - in real app, fetch by ID
-    const mockJobData = {
-      id: params.id,
-      title: "Residential Wiring Assistant",
-      shopName: "Bay Area Electric Co.",
-      shopId: "shop-1",
-      startDate: "2025-01-10",
-      endDate: "2025-01-15",
-      totalDays: 10,
-      totalHours: 80,
-      payRate: "$20/hour",
-      totalPay: 1600,
+    if (!jobId) {
+      toast({
+        title: "Error",
+        description: "Job ID is missing.",
+        variant: "destructive",
+      })
+      router.push("/dashboard/apprentice")
+      return
     }
-    setJobData(mockJobData)
-  }, [router, params.id])
+
+    try {
+      const activeJob = await getActiveJobById(jobId)
+      if (!activeJob || activeJob.apprenticeId !== user.id) {
+        toast({
+          title: "Unauthorized",
+          description: "You are not authorized to review this job.",
+          variant: "destructive",
+        })
+        router.push("/dashboard/apprentice")
+        return
+      }
+      setJobData(activeJob)
+
+      // Fetch shop details
+      const shop = await updateUser(activeJob.shopId, {}) // Fetch full shop data
+      setShopUser(shop)
+    } catch (error) {
+      console.error("Failed to load job data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load job details. Please try again.",
+        variant: "destructive",
+      })
+      router.push("/dashboard/apprentice")
+    }
+  }, [router, jobId, toast])
+
+  useEffect(() => {
+    loadJobAndUser()
+  }, [loadJobAndUser])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
 
-    if (rating === 0) {
-      alert("Please provide a rating")
+    if (!currentUser || !jobData || !shopUser) {
+      toast({
+        title: "Error",
+        description: "Missing user or job data.",
+        variant: "destructive",
+      })
       setIsSubmitting(false)
       return
     }
 
-    // Simulate API call
-    setTimeout(() => {
-      // In real app, save review and update job status
-      console.log("Review submitted:", {
-        jobId: params.id,
-        rating,
-        comment,
+    if (rating === 0) {
+      toast({
+        title: "Missing Rating",
+        description: "Please provide a rating.",
+        variant: "destructive",
+      })
+      setIsSubmitting(false)
+      return
+    }
+
+    try {
+      // Create review
+      await createReview({
+        jobId: jobData.id,
+        reviewerId: currentUser.id,
+        revieweeId: jobData.shopId,
+        reviewerType: "apprentice",
+        rating: rating,
+        comment: comment,
+        jobTitle: jobData.title,
       })
 
-      // Redirect back to dashboard
-      router.push("/dashboard/apprentice?tab=active&completed=true")
+      // Update active job status to 'reviewed'
+      await updateActiveJob(jobData.id, { status: "reviewed", endDate: new Date().toISOString().split("T")[0] })
+
+      // Update shop's average rating (simplified, in real app would be more complex)
+      // For now, just mark job as completed for apprentice
+      const updatedApprentice = await updateUser(currentUser.id, {
+        jobsCompleted: (currentUser.jobsCompleted || 0) + 1,
+      })
+      setCurrentUserState(updatedApprentice) // Update local state and localStorage
+
+      toast({
+        title: "Job Reviewed & Completed",
+        description: "Your review has been submitted and the job marked complete.",
+      })
+
+      router.push("/dashboard/apprentice?tab=active") // Redirect back to apprentice dashboard
+    } catch (error) {
+      console.error("Failed to submit review or complete job:", error)
+      toast({
+        title: "Error",
+        description: "Failed to complete job. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
       setIsSubmitting(false)
-    }, 1000)
+    }
   }
 
   const renderStarRating = () => {
@@ -88,7 +163,12 @@ export default function JobReviewPage() {
     )
   }
 
-  if (!currentUser || !jobData) {
+  const setCurrentUser = (user: User) => {
+    localStorage.setItem("user", JSON.stringify(user))
+    setCurrentUserState(user)
+  }
+
+  if (!currentUser || !jobData || !shopUser) {
     return <div>Loading...</div>
   }
 
@@ -125,12 +205,12 @@ export default function JobReviewPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <p className="text-sm font-medium">Shop</p>
-                <p className="text-sm text-muted-foreground">{jobData.shopName}</p>
+                <p className="text-sm text-muted-foreground">{shopUser.businessName}</p>
               </div>
               <div>
                 <p className="text-sm font-medium">Duration</p>
                 <p className="text-sm text-muted-foreground">
-                  {new Date(jobData.startDate).toLocaleDateString()} - {new Date(jobData.endDate).toLocaleDateString()}
+                  {new Date(jobData.startDate).toLocaleDateString()} - {new Date().toLocaleDateString()}
                 </p>
               </div>
               <div>
@@ -139,7 +219,9 @@ export default function JobReviewPage() {
               </div>
               <div>
                 <p className="text-sm font-medium">Total Pay</p>
-                <p className="text-sm text-green-600">${jobData.totalPay.toFixed(2)}</p>
+                <p className="text-sm text-green-600">
+                  ${(Number.parseFloat(jobData.payRate.replace(/[^0-9.]/g, "")) * jobData.totalHours).toFixed(2)}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -150,7 +232,7 @@ export default function JobReviewPage() {
             <CardHeader>
               <CardTitle>Rate Your Experience</CardTitle>
               <CardDescription>
-                How would you rate your overall experience working with {jobData.shopName}?
+                How would you rate your overall experience working with {shopUser.businessName}?
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -196,8 +278,9 @@ export default function JobReviewPage() {
               🎉 Congratulations on completing your job!
             </h3>
             <p className="text-sm text-green-700 dark:text-green-300">
-              Your payment of ${jobData.totalPay.toFixed(2)} will be processed and deposited to your account within 1-2
-              business days.
+              Your payment of $
+              {(Number.parseFloat(jobData.payRate.replace(/[^0-9.]/g, "")) * jobData.totalHours).toFixed(2)} will be
+              processed and deposited to your account within 1-2 business days.
             </p>
           </div>
 

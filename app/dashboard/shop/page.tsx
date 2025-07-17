@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -35,14 +35,13 @@ import {
   getCurrentUser,
   setCurrentUser,
   getUsers,
-  getJobPostingsByShop,
-  saveJobPosting,
-  getActiveJobsByUser,
-  saveJobInvitation,
+  getJobPostings as fetchJobPostings,
+  createJobPosting,
+  getActiveJobs as fetchActiveJobs,
+  createJobInvitation,
   type User,
   type JobPosting,
   type ActiveJob,
-  type JobInvitation,
 } from "@/lib/storage"
 
 const availableSkills = [
@@ -87,7 +86,7 @@ export default function ShopDashboard() {
   const router = useRouter()
   const { toast } = useToast()
 
-  useEffect(() => {
+  const loadDashboardData = useCallback(async () => {
     const user = getCurrentUser()
     if (!user) {
       router.push("/login")
@@ -101,21 +100,33 @@ export default function ShopDashboard() {
 
     setCurrentUserState(user)
 
-    // Load apprentices
-    const allUsers = getUsers()
-    const apprenticeUsers = allUsers.filter((u) => u.type === "apprentice")
-    setApprentices(apprenticeUsers)
-    setFilteredApprentices(apprenticeUsers)
+    try {
+      // Load apprentices
+      const allUsers = await getUsers("apprentice")
+      setApprentices(allUsers)
+      setFilteredApprentices(allUsers)
 
-    // Load job postings
-    const userJobPostings = getJobPostingsByShop(user.id)
-    setJobPostings(userJobPostings)
-    setHasActiveJobs(userJobPostings.length > 0)
+      // Load job postings for the current shop
+      const userJobPostings = await fetchJobPostings(user.id)
+      setJobPostings(userJobPostings)
+      setHasActiveJobs(userJobPostings.length > 0)
 
-    // Load active jobs
-    const userActiveJobs = getActiveJobsByUser(user.id, "shop")
-    setActiveJobs(userActiveJobs)
-  }, [router])
+      // Load active jobs for the current shop
+      const userActiveJobs = await fetchActiveJobs(user.id, "shop")
+      setActiveJobs(userActiveJobs.filter((job) => job.status === "in-progress")) // Only show in-progress active jobs
+    } catch (error) {
+      console.error("Failed to load dashboard data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load dashboard data. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }, [router, toast])
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [loadDashboardData])
 
   useEffect(() => {
     let filtered = apprentices
@@ -145,88 +156,93 @@ export default function ShopDashboard() {
     router.push("/")
   }
 
-  const handleJobSubmit = (e: React.FormEvent) => {
+  const handleJobSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!currentUser) return
 
-    // Calculate costs
-    const hourlyRate = Number.parseFloat(newJob.payRate.replace(/[^0-9.-]+/g, "")) || 20
-    const totalHours = newJob.daysNeeded * newJob.hoursPerDay * newJob.apprenticesNeeded
-    const totalCost = totalHours * hourlyRate
-    const weeklyPayment =
-      newJob.daysNeeded > 7 ? 7 * newJob.hoursPerDay * newJob.apprenticesNeeded * hourlyRate : totalCost
+    try {
+      // Calculate costs
+      const hourlyRate = Number.parseFloat(newJob.payRate.replace(/[^0-9.-]+/g, "")) || 20
+      const totalHours = newJob.daysNeeded * newJob.hoursPerDay * newJob.apprenticesNeeded
+      const totalCost = totalHours * hourlyRate
+      const weeklyPayment =
+        newJob.daysNeeded > 7 ? 7 * newJob.hoursPerDay * newJob.apprenticesNeeded * hourlyRate : totalCost
 
-    const job: JobPosting = {
-      id: `job-${Date.now()}`,
-      shopId: currentUser.id,
-      ...newJob,
-      status: "active",
-      applicants: 0,
-      postedDate: new Date().toISOString().split("T")[0],
-      totalCost,
-      weeklyPayment,
-    }
+      const jobDataToCreate: Omit<JobPosting, "id" | "postedDate" | "applicants"> = {
+        shopId: currentUser.id,
+        ...newJob,
+        status: "active",
+        totalCost,
+        weeklyPayment,
+        applicants: 0, // Default to 0 applicants
+      }
 
-    saveJobPosting(job)
-    setJobPostings([job, ...jobPostings])
-    setHasActiveJobs(true)
-    setShowJobForm(false)
-    setNewJob({
-      title: "",
-      description: "",
-      apprenticesNeeded: 1,
-      expectedDuration: "",
-      daysNeeded: 1,
-      startDate: "",
-      hoursPerDay: 8,
-      workDays: [],
-      payRate: "",
-      requirements: [],
-      requiredSkills: [],
-      priority: "medium",
-    })
-
-    toast({
-      title: "Job posted successfully",
-      description: "Your job posting is now live and visible to apprentices",
-    })
-
-    // Auto-send to matching apprentices for high priority jobs
-    if (job.priority === "high") {
-      const matchingApprentices = apprentices.filter((apprentice) =>
-        apprentice.skills?.some((skill) => job.requiredSkills.includes(skill)),
-      )
-
-      matchingApprentices.forEach((apprentice) => {
-        const invitation: JobInvitation = {
-          id: `invitation-${Date.now()}-${apprentice.id}`,
-          jobPostingId: job.id,
-          shopId: currentUser.id,
-          apprenticeId: apprentice.id,
-          shopName: currentUser.businessName || "Unknown Shop",
-          title: job.title,
-          description: job.description,
-          payRate: job.payRate,
-          daysNeeded: job.daysNeeded,
-          startDate: job.startDate,
-          hoursPerDay: job.hoursPerDay,
-          workDays: job.workDays,
-          requirements: job.requirements,
-          requiredSkills: job.requiredSkills,
-          location: `${currentUser.city}, ${currentUser.state}`,
-          priority: job.priority,
-          totalPay: job.totalCost || 0,
-          weeklyPay: job.weeklyPayment,
-          status: "pending",
-          sentAt: new Date().toISOString(),
-        }
-        saveJobInvitation(invitation)
+      const newJobPosting = await createJobPosting(jobDataToCreate)
+      setJobPostings((prev) => [newJobPosting, ...prev])
+      setHasActiveJobs(true)
+      setShowJobForm(false)
+      setNewJob({
+        title: "",
+        description: "",
+        apprenticesNeeded: 1,
+        expectedDuration: "",
+        daysNeeded: 1,
+        startDate: "",
+        hoursPerDay: 8,
+        workDays: [],
+        payRate: "",
+        requirements: [],
+        requiredSkills: [],
+        priority: "medium",
       })
 
       toast({
-        title: "High priority job sent",
-        description: `Automatically sent to ${matchingApprentices.length} matching apprentices`,
+        title: "Job posted successfully",
+        description: "Your job posting is now live and visible to apprentices",
+      })
+
+      // Auto-send to matching apprentices for high priority jobs
+      if (newJobPosting.priority === "high") {
+        const matchingApprentices = apprentices.filter((apprentice) =>
+          apprentice.skills?.some((skill) => newJobPosting.requiredSkills.includes(skill)),
+        )
+
+        for (const apprentice of matchingApprentices) {
+          const invitationData = {
+            jobPostingId: newJobPosting.id,
+            shopId: currentUser.id,
+            apprenticeId: apprentice.id,
+            shopName: currentUser.businessName || "Unknown Shop",
+            title: newJobPosting.title,
+            description: newJobPosting.description,
+            payRate: newJobPosting.payRate,
+            daysNeeded: newJobPosting.daysNeeded,
+            startDate: newJobPosting.startDate,
+            hoursPerDay: newJobPosting.hoursPerDay,
+            workDays: newJobPosting.workDays,
+            requirements: newJobPosting.requirements,
+            requiredSkills: newJobPosting.requiredSkills,
+            location: `${currentUser.city}, ${currentUser.state}`,
+            priority: newJobPosting.priority,
+            totalPay: newJobPosting.totalCost || 0,
+            weeklyPay: newJobPosting.weeklyPayment,
+            status: "pending",
+          }
+          await createJobInvitation(invitationData)
+        }
+
+        toast({
+          title: "High priority job sent",
+          description: `Automatically sent to ${matchingApprentices.length} matching apprentices`,
+        })
+      }
+    } catch (error) {
+      console.error("Failed to post job:", error)
+      toast({
+        title: "Error",
+        description: "Failed to post job. Please try again.",
+        variant: "destructive",
       })
     }
   }
@@ -252,52 +268,59 @@ export default function ShopDashboard() {
       setShowBrowseRestriction(true)
       return
     }
-    // Allow browsing
+    setShowBrowseRestriction(false) // Hide restriction if jobs exist
   }
 
-  const handleInviteApprentice = (apprentice: User) => {
+  const handleInviteApprentice = async (apprentice: User) => {
     if (!currentUser) return
 
-    // For demo purposes, create a sample job invitation
-    const sampleJob = jobPostings[0] // Use first job posting
+    // For demo purposes, use the first active job posting
+    const sampleJob = jobPostings.find((job) => job.status === "active")
     if (!sampleJob) {
       toast({
         title: "No active jobs",
-        description: "Please create a job posting first",
+        description: "Please create an active job posting first to invite apprentices.",
         variant: "destructive",
       })
       return
     }
 
-    const invitation: JobInvitation = {
-      id: `invitation-${Date.now()}-${apprentice.id}`,
-      jobPostingId: sampleJob.id,
-      shopId: currentUser.id,
-      apprenticeId: apprentice.id,
-      shopName: currentUser.businessName || "Unknown Shop",
-      title: sampleJob.title,
-      description: sampleJob.description,
-      payRate: sampleJob.payRate,
-      daysNeeded: sampleJob.daysNeeded,
-      startDate: sampleJob.startDate,
-      hoursPerDay: sampleJob.hoursPerDay,
-      workDays: sampleJob.workDays,
-      requirements: sampleJob.requirements,
-      requiredSkills: sampleJob.requiredSkills,
-      location: `${currentUser.city}, ${currentUser.state}`,
-      priority: sampleJob.priority,
-      totalPay: sampleJob.totalCost || 0,
-      weeklyPay: sampleJob.weeklyPayment,
-      status: "pending",
-      sentAt: new Date().toISOString(),
+    try {
+      const invitationData = {
+        jobPostingId: sampleJob.id,
+        shopId: currentUser.id,
+        apprenticeId: apprentice.id,
+        shopName: currentUser.businessName || "Unknown Shop",
+        title: sampleJob.title,
+        description: sampleJob.description,
+        payRate: sampleJob.payRate,
+        daysNeeded: sampleJob.daysNeeded,
+        startDate: sampleJob.startDate,
+        hoursPerDay: sampleJob.hoursPerDay,
+        workDays: sampleJob.workDays,
+        requirements: sampleJob.requirements,
+        requiredSkills: sampleJob.requiredSkills,
+        location: `${currentUser.city}, ${currentUser.state}`,
+        priority: sampleJob.priority,
+        totalPay: sampleJob.totalCost || 0,
+        weeklyPay: sampleJob.weeklyPayment,
+        status: "pending" as const,
+      }
+
+      await createJobInvitation(invitationData)
+
+      toast({
+        title: "Invitation sent",
+        description: `Job invitation sent to ${apprentice.firstName} ${apprentice.lastName?.charAt(0)}.`,
+      })
+    } catch (error) {
+      console.error("Failed to send invitation:", error)
+      toast({
+        title: "Error",
+        description: "Failed to send invitation. Please try again.",
+        variant: "destructive",
+      })
     }
-
-    saveJobInvitation(invitation)
-
-    toast({
-      title: "Invitation sent",
-      description: `Job invitation sent to ${apprentice.firstName} ${apprentice.lastName}`,
-    })
   }
 
   const calculateOwedAmount = () => {
@@ -372,8 +395,8 @@ export default function ShopDashboard() {
               <Briefcase className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{jobPostings.filter((j) => j.status === "active").length}</div>
-              <p className="text-xs text-muted-foreground">Currently posted</p>
+              <div className="text-2xl font-bold">{activeJobs.length}</div>
+              <p className="text-xs text-muted-foreground">Currently in progress</p>
             </CardContent>
           </Card>
           <Card>

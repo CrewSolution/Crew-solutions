@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,6 +12,17 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Star, ArrowLeft, Zap } from "lucide-react"
 import Link from "next/link"
+import { useToast } from "@/hooks/use-toast"
+import {
+  getCurrentUser,
+  getActiveJobById,
+  createReview,
+  updateActiveJob,
+  updateUser,
+  fetchReviews, // Declare fetchReviews here
+  type User,
+  type ActiveJob,
+} from "@/lib/storage"
 
 const skillOptions = [
   "Basic Electrical Theory",
@@ -29,8 +40,10 @@ const skillOptions = [
 export default function JobCompletePage() {
   const router = useRouter()
   const params = useParams()
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [jobData, setJobData] = useState<any>(null)
+  const jobId = params.id as string
+  const [currentUser, setCurrentUserState] = useState<User | null>(null)
+  const [jobData, setJobData] = useState<ActiveJob | null>(null)
+  const [apprenticeUser, setApprenticeUser] = useState<User | null>(null) // To get apprentice's full name
   const [ratings, setRatings] = useState({
     timeliness: 0,
     workEthic: 0,
@@ -40,33 +53,61 @@ export default function JobCompletePage() {
   const [skillsShown, setSkillsShown] = useState<string[]>([])
   const [comment, setComment] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const { toast } = useToast()
 
-  useEffect(() => {
-    const user = localStorage.getItem("currentUser")
+  const loadJobAndUser = useCallback(async () => {
+    const user = getCurrentUser()
     if (!user) {
       router.push("/login")
       return
     }
+    setCurrentUserState(user)
 
-    const userData = JSON.parse(user)
-    setCurrentUser(userData)
-
-    // Mock job data - in real app, fetch by ID
-    const mockJobData = {
-      id: params.id,
-      title: "Residential Wiring Assistant",
-      apprenticeName: "Marcus C.",
-      apprenticeId: "1",
-      startDate: "2025-01-10",
-      endDate: "2025-01-15",
-      totalDays: 10,
-      totalHours: 80,
-      payRate: "$20/hour",
-      totalPay: 1600,
-      apprenticeSkills: ["Wiring Installation", "Safety Protocols", "Hand Tools", "Basic Electrical Theory"],
+    if (!jobId) {
+      toast({
+        title: "Error",
+        description: "Job ID is missing.",
+        variant: "destructive",
+      })
+      router.push("/dashboard/shop")
+      return
     }
-    setJobData(mockJobData)
-  }, [router, params.id])
+
+    try {
+      const activeJob = await getActiveJobById(jobId)
+      if (!activeJob || activeJob.shopId !== user.id) {
+        toast({
+          title: "Unauthorized",
+          description: "You are not authorized to complete this job.",
+          variant: "destructive",
+        })
+        router.push("/dashboard/shop")
+        return
+      }
+      setJobData(activeJob)
+
+      // Fetch apprentice details
+      const apprentice = await updateUser(activeJob.apprenticeId, {}) // Fetch full apprentice data
+      setApprenticeUser(apprentice)
+
+      // Initialize skillsShown with apprentice's listed skills
+      if (apprentice?.skills) {
+        setSkillsShown(apprentice.skills)
+      }
+    } catch (error) {
+      console.error("Failed to load job data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load job details. Please try again.",
+        variant: "destructive",
+      })
+      router.push("/dashboard/shop")
+    }
+  }, [router, jobId, toast])
+
+  useEffect(() => {
+    loadJobAndUser()
+  }, [loadJobAndUser])
 
   const handleRatingChange = (category: string, rating: number) => {
     setRatings((prev) => ({ ...prev, [category]: rating }))
@@ -80,28 +121,78 @@ export default function JobCompletePage() {
     e.preventDefault()
     setIsSubmitting(true)
 
-    // Validate all ratings are provided
-    const allRatingsProvided = Object.values(ratings).every((rating) => rating > 0)
-    if (!allRatingsProvided) {
-      alert("Please provide ratings for all categories")
+    if (!currentUser || !jobData || !apprenticeUser) {
+      toast({
+        title: "Error",
+        description: "Missing user or job data.",
+        variant: "destructive",
+      })
       setIsSubmitting(false)
       return
     }
 
-    // Simulate API call
-    setTimeout(() => {
-      // In real app, save review and update job status
-      console.log("Review submitted:", {
-        jobId: params.id,
-        ratings,
-        skillsShown,
-        comment,
+    // Validate all ratings are provided
+    const allRatingsProvided = Object.values(ratings).every((rating) => rating > 0)
+    if (!allRatingsProvided) {
+      toast({
+        title: "Missing Ratings",
+        description: "Please provide ratings for all categories.",
+        variant: "destructive",
+      })
+      setIsSubmitting(false)
+      return
+    }
+
+    try {
+      // Create review
+      await createReview({
+        jobId: jobData.id,
+        reviewerId: currentUser.id,
+        revieweeId: jobData.apprenticeId,
+        reviewerType: "shop",
+        rating: Math.round(Object.values(ratings).reduce((sum, r) => sum + r, 0) / Object.values(ratings).length), // Overall average rating
+        comment: comment,
+        ratings: ratings,
+        skillsShown: skillsShown,
+        jobTitle: jobData.title,
       })
 
-      // Redirect back to dashboard
-      router.push("/dashboard/shop?tab=active&completed=true")
+      // Update active job status to 'reviewed'
+      await updateActiveJob(jobData.id, { status: "reviewed", endDate: new Date().toISOString().split("T")[0] })
+
+      // Update apprentice's total jobs completed and average rating
+      const apprenticeReviews = await fetchReviews(apprenticeUser.id, true)
+      const newJobsCompleted = (apprenticeUser.jobsCompleted || 0) + 1
+      const newAverageRating =
+        apprenticeReviews.length > 0
+          ? (apprenticeReviews.reduce((sum, r) => sum + r.rating, 0) + ratings.profileAccuracy) /
+            (apprenticeReviews.length + 1)
+          : ratings.profileAccuracy
+
+      await updateUser(apprenticeUser.id, {
+        jobsCompleted: newJobsCompleted,
+        rating: newAverageRating,
+        hoursCompleted: (
+          Number.parseInt(apprenticeUser.hoursCompleted?.toString() || "0") + jobData.totalHours
+        ).toString(),
+      })
+
+      toast({
+        title: "Job Completed & Reviewed",
+        description: "The job has been marked complete and your review submitted.",
+      })
+
+      router.push("/dashboard/shop?tab=active") // Redirect back to shop dashboard
+    } catch (error) {
+      console.error("Failed to submit review or complete job:", error)
+      toast({
+        title: "Error",
+        description: "Failed to complete job. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
       setIsSubmitting(false)
-    }, 1000)
+    }
   }
 
   const renderStarRating = (category: string, currentRating: number) => {
@@ -128,7 +219,7 @@ export default function JobCompletePage() {
     )
   }
 
-  if (!currentUser || !jobData) {
+  if (!currentUser || !jobData || !apprenticeUser) {
     return <div>Loading...</div>
   }
 
@@ -165,12 +256,14 @@ export default function JobCompletePage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <p className="text-sm font-medium">Apprentice</p>
-                <p className="text-sm text-muted-foreground">{jobData.apprenticeName}</p>
+                <p className="text-sm text-muted-foreground">
+                  {apprenticeUser.firstName} {apprenticeUser.lastName?.charAt(0)}.
+                </p>
               </div>
               <div>
                 <p className="text-sm font-medium">Duration</p>
                 <p className="text-sm text-muted-foreground">
-                  {new Date(jobData.startDate).toLocaleDateString()} - {new Date(jobData.endDate).toLocaleDateString()}
+                  {new Date(jobData.startDate).toLocaleDateString()} - {new Date().toLocaleDateString()}
                 </p>
               </div>
               <div>
@@ -179,7 +272,9 @@ export default function JobCompletePage() {
               </div>
               <div>
                 <p className="text-sm font-medium">Total Pay</p>
-                <p className="text-sm text-green-600">${jobData.totalPay.toFixed(2)}</p>
+                <p className="text-sm text-green-600">
+                  ${(Number.parseFloat(jobData.payRate.replace(/[^0-9.]/g, "")) * jobData.totalHours).toFixed(2)}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -230,7 +325,7 @@ export default function JobCompletePage() {
             <CardHeader>
               <CardTitle>Skills Demonstrated</CardTitle>
               <CardDescription>
-                Check the skills that {jobData.apprenticeName} demonstrated on the job site
+                Check the skills that {apprenticeUser.firstName} demonstrated on the job site
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -238,7 +333,7 @@ export default function JobCompletePage() {
                 <div>
                   <Label className="text-sm font-medium">Apprentice's Listed Skills:</Label>
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {jobData.apprenticeSkills.map((skill: string) => (
+                    {apprenticeUser.skills?.map((skill: string) => (
                       <Badge key={skill} variant="secondary" className="text-xs">
                         {skill}
                       </Badge>

@@ -1,9 +1,10 @@
-// Local storage utilities for managing user data
+// This file now acts as a client-side data service that interacts with API routes.
+
 export interface User {
   id: string
   type: "shop" | "apprentice"
   email: string
-  password: string
+  password?: string // Password is not returned from API
   firstName?: string
   lastName?: string
   businessName?: string
@@ -20,7 +21,7 @@ export interface User {
   education?: string
   schoolName?: string
   major?: string
-  hoursCompleted?: string
+  hoursCompleted?: string | number
   availability?: string
   transportation?: boolean
   willingToTravel?: boolean
@@ -77,12 +78,13 @@ export interface ActiveJob {
   pendingHours: number
   canComplete: boolean
   canSubmitHours: boolean
-  timeEntries: TimeEntry[]
+  timeEntries?: TimeEntry[] // Not directly stored in DB, but can be fetched
 }
 
 export interface TimeEntry {
   id: string
   jobId: string
+  apprenticeId: string
   date: string
   hours: number
   approved: boolean
@@ -132,223 +134,228 @@ export interface Review {
   date: string
 }
 
-// Storage keys
-const STORAGE_KEYS = {
-  USERS: "crew_solutions_users",
-  JOB_POSTINGS: "crew_solutions_job_postings",
-  ACTIVE_JOBS: "crew_solutions_active_jobs",
-  JOB_INVITATIONS: "crew_solutions_job_invitations",
-  REVIEWS: "crew_solutions_reviews",
-  TIME_ENTRIES: "crew_solutions_time_entries",
-  CURRENT_USER: "currentUser",
-}
+// --- API Calls ---
 
-// Generic storage functions
-export function getFromStorage<T>(key: string, defaultValue: T): T {
-  if (typeof window === "undefined") return defaultValue
-  try {
-    const item = localStorage.getItem(key)
-    return item ? JSON.parse(item) : defaultValue
-  } catch (error) {
-    console.error(`Error reading from localStorage key ${key}:`, error)
-    return defaultValue
-  }
-}
+const API_BASE_URL = "/api"
 
-export function saveToStorage<T>(key: string, value: T): void {
-  if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(key, JSON.stringify(value))
-  } catch (error) {
-    console.error(`Error saving to localStorage key ${key}:`, error)
+async function fetchData<T>(url: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(url, options)
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.message || "Something went wrong")
   }
+  return response.json()
 }
 
 // User management
-export function getUsers(): User[] {
-  return getFromStorage<User[]>(STORAGE_KEYS.USERS, [])
+export async function getUsers(type?: "shop" | "apprentice", email?: string): Promise<User[]> {
+  let url = `${API_BASE_URL}/users`
+  const params = new URLSearchParams()
+  if (type) params.append("type", type)
+  if (email) params.append("email", email)
+  if (params.toString()) url += `?${params.toString()}`
+  return fetchData<User[]>(url)
 }
 
-export function saveUser(user: User): void {
-  const users = getUsers()
-  const existingIndex = users.findIndex((u) => u.id === user.id)
-
-  if (existingIndex >= 0) {
-    users[existingIndex] = user
-  } else {
-    users.push(user)
-  }
-
-  saveToStorage(STORAGE_KEYS.USERS, users)
+export async function getUserById(id: string): Promise<User> {
+  return fetchData<User>(`${API_BASE_URL}/users/${id}`)
 }
 
-export function getUserById(id: string): User | null {
-  const users = getUsers()
-  return users.find((u) => u.id === id) || null
+export async function createUser(
+  userData: Omit<User, "id" | "createdAt" | "profileComplete" | "rating" | "jobsCompleted" | "hoursCompleted"> & {
+    password: string
+  },
+): Promise<User> {
+  return fetchData<User>(`${API_BASE_URL}/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(userData),
+  })
 }
 
-export function authenticateUser(email: string, password: string): User | null {
-  const users = getUsers()
-  return users.find((u) => u.email === email && u.password === password) || null
+export async function updateUser(id: string, updateData: Partial<User>): Promise<User> {
+  return fetchData<User>(`${API_BASE_URL}/users/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updateData),
+  })
+}
+
+export async function authenticateUser(email: string, password: string): Promise<User> {
+  return fetchData<User>(`${API_BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  })
 }
 
 // Job postings
-export function getJobPostings(): JobPosting[] {
-  return getFromStorage<JobPosting[]>(STORAGE_KEYS.JOB_POSTINGS, [])
+export async function getJobPostings(shopId?: string, status?: string): Promise<JobPosting[]> {
+  let url = `${API_BASE_URL}/jobs`
+  const params = new URLSearchParams()
+  if (shopId) params.append("shopId", shopId)
+  if (status) params.append("status", status)
+  if (params.toString()) url += `?${params.toString()}`
+  return fetchData<JobPosting[]>(url)
 }
 
-export function saveJobPosting(job: JobPosting): void {
-  const jobs = getJobPostings()
-  const existingIndex = jobs.findIndex((j) => j.id === job.id)
-
-  if (existingIndex >= 0) {
-    jobs[existingIndex] = job
-  } else {
-    jobs.push(job)
-  }
-
-  saveToStorage(STORAGE_KEYS.JOB_POSTINGS, jobs)
+export async function getJobPostingById(id: string): Promise<JobPosting> {
+  return fetchData<JobPosting>(`${API_BASE_URL}/jobs/${id}`)
 }
 
-export function getJobPostingsByShop(shopId: string): JobPosting[] {
-  const jobs = getJobPostings()
-  return jobs.filter((j) => j.shopId === shopId)
+export async function createJobPosting(
+  jobData: Omit<JobPosting, "id" | "postedDate" | "applicants" | "status"> & { status: "active" | "filled" | "paused" },
+): Promise<JobPosting> {
+  return fetchData<JobPosting>(`${API_BASE_URL}/jobs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(jobData),
+  })
+}
+
+export async function updateJobPosting(id: string, updateData: Partial<JobPosting>): Promise<JobPosting> {
+  return fetchData<JobPosting>(`${API_BASE_URL}/jobs/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updateData),
+  })
 }
 
 // Active jobs
-export function getActiveJobs(): ActiveJob[] {
-  return getFromStorage<ActiveJob[]>(STORAGE_KEYS.ACTIVE_JOBS, [])
+export async function getActiveJobs(
+  userId?: string,
+  userType?: "shop" | "apprentice",
+  status?: string,
+): Promise<ActiveJob[]> {
+  let url = `${API_BASE_URL}/active-jobs`
+  const params = new URLSearchParams()
+  if (userId) params.append("userId", userId)
+  if (userType) params.append("userType", userType)
+  if (status) params.append("status", status)
+  if (params.toString()) url += `?${params.toString()}`
+  return fetchData<ActiveJob[]>(url)
 }
 
-export function saveActiveJob(job: ActiveJob): void {
-  const jobs = getActiveJobs()
-  const existingIndex = jobs.findIndex((j) => j.id === job.id)
-
-  if (existingIndex >= 0) {
-    jobs[existingIndex] = job
-  } else {
-    jobs.push(job)
-  }
-
-  saveToStorage(STORAGE_KEYS.ACTIVE_JOBS, jobs)
+export async function getActiveJobById(id: string): Promise<ActiveJob> {
+  return fetchData<ActiveJob>(`${API_BASE_URL}/active-jobs/${id}`)
 }
 
-export function getActiveJobsByUser(userId: string, userType: "shop" | "apprentice"): ActiveJob[] {
-  const jobs = getActiveJobs()
-  return jobs.filter((j) => (userType === "shop" ? j.shopId === userId : j.apprenticeId === userId))
+export async function createActiveJob(jobData: Omit<ActiveJob, "id" | "timeEntries">): Promise<ActiveJob> {
+  return fetchData<ActiveJob>(`${API_BASE_URL}/active-jobs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(jobData),
+  })
+}
+
+export async function updateActiveJob(id: string, updateData: Partial<ActiveJob>): Promise<ActiveJob> {
+  return fetchData<ActiveJob>(`${API_BASE_URL}/active-jobs/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updateData),
+  })
 }
 
 // Job invitations
-export function getJobInvitations(): JobInvitation[] {
-  return getFromStorage<JobInvitation[]>(STORAGE_KEYS.JOB_INVITATIONS, [])
+export async function getJobInvitations(apprenticeId?: string, status?: string): Promise<JobInvitation[]> {
+  let url = `${API_BASE_URL}/invitations`
+  const params = new URLSearchParams()
+  if (apprenticeId) params.append("apprenticeId", apprenticeId)
+  if (status) params.append("status", status)
+  if (params.toString()) url += `?${params.toString()}`
+  return fetchData<JobInvitation[]>(url)
 }
 
-export function saveJobInvitation(invitation: JobInvitation): void {
-  const invitations = getJobInvitations()
-  const existingIndex = invitations.findIndex((i) => i.id === invitation.id)
-
-  if (existingIndex >= 0) {
-    invitations[existingIndex] = invitation
-  } else {
-    invitations.push(invitation)
-  }
-
-  saveToStorage(STORAGE_KEYS.JOB_INVITATIONS, invitations)
+export async function createJobInvitation(
+  invitationData: Omit<JobInvitation, "id" | "sentAt">,
+): Promise<JobInvitation> {
+  return fetchData<JobInvitation>(`${API_BASE_URL}/invitations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(invitationData),
+  })
 }
 
-export function getJobInvitationsByApprentice(apprenticeId: string): JobInvitation[] {
-  const invitations = getJobInvitations()
-  return invitations.filter((i) => i.apprenticeId === apprenticeId && i.status === "pending")
+export async function updateJobInvitationStatus(
+  id: string,
+  status: "pending" | "accepted" | "declined",
+): Promise<JobInvitation> {
+  return fetchData<JobInvitation>(`${API_BASE_URL}/invitations/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  })
 }
 
 // Reviews
-export function getReviews(): Review[] {
-  return getFromStorage<Review[]>(STORAGE_KEYS.REVIEWS, [])
+export async function getReviews(revieweeId?: string, reviewerId?: string): Promise<Review[]> {
+  let url = `${API_BASE_URL}/reviews`
+  const params = new URLSearchParams()
+  if (revieweeId) params.append("revieweeId", revieweeId)
+  if (reviewerId) params.append("reviewerId", reviewerId)
+  if (params.toString()) url += `?${params.toString()}`
+  return fetchData<Review[]>(url)
 }
 
-export function saveReview(review: Review): void {
-  const reviews = getReviews()
-  reviews.push(review)
-  saveToStorage(STORAGE_KEYS.REVIEWS, reviews)
-}
-
-export function getReviewsByUser(userId: string, asReviewee = true): Review[] {
-  const reviews = getReviews()
-  return reviews.filter((r) => (asReviewee ? r.revieweeId === userId : r.reviewerId === userId))
+export async function createReview(reviewData: Omit<Review, "id" | "date">): Promise<Review> {
+  return fetchData<Review>(`${API_BASE_URL}/reviews`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(reviewData),
+  })
 }
 
 // Time entries
-export function getTimeEntries(): TimeEntry[] {
-  return getFromStorage<TimeEntry[]>(STORAGE_KEYS.TIME_ENTRIES, [])
+export async function getTimeEntries(jobId?: string, apprenticeId?: string): Promise<TimeEntry[]> {
+  let url = `${API_BASE_URL}/time-entries`
+  const params = new URLSearchParams()
+  if (jobId) params.append("jobId", jobId)
+  if (apprenticeId) params.append("apprenticeId", apprenticeId)
+  if (params.toString()) url += `?${params.toString()}`
+  return fetchData<TimeEntry[]>(url)
 }
 
-export function saveTimeEntry(entry: TimeEntry): void {
-  const entries = getTimeEntries()
-  entries.push(entry)
-  saveToStorage(STORAGE_KEYS.TIME_ENTRIES, entries)
+export async function createTimeEntry(
+  entryData: Omit<TimeEntry, "id" | "submittedAt" | "approvedAt">,
+): Promise<TimeEntry> {
+  return fetchData<TimeEntry>(`${API_BASE_URL}/time-entries`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(entryData),
+  })
 }
 
-export function getTimeEntriesByJob(jobId: string): TimeEntry[] {
-  const entries = getTimeEntries()
-  return entries.filter((e) => e.jobId === jobId)
+export async function approveTimeEntry(id: string): Promise<TimeEntry> {
+  return fetchData<TimeEntry>(`${API_BASE_URL}/time-entries`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, approved: true }),
+  })
 }
 
-// Current user
+// Current user (still using localStorage for session management for simplicity in this context)
+const CURRENT_USER_STORAGE_KEY = "currentUser"
+
 export function getCurrentUser(): User | null {
-  return getFromStorage<User | null>(STORAGE_KEYS.CURRENT_USER, null)
+  if (typeof window === "undefined") return null
+  try {
+    const item = localStorage.getItem(CURRENT_USER_STORAGE_KEY)
+    return item ? JSON.parse(item) : null
+  } catch (error) {
+    console.error(`Error reading from localStorage key ${CURRENT_USER_STORAGE_KEY}:`, error)
+    return null
+  }
 }
 
 export function setCurrentUser(user: User | null): void {
-  saveToStorage(STORAGE_KEYS.CURRENT_USER, user)
-}
-
-// Initialize with sample data if empty
-export function initializeSampleData(): void {
-  const users = getUsers()
-  if (users.length === 0) {
-    // Add sample users
-    const sampleUsers: User[] = [
-      {
-        id: "shop-1",
-        type: "shop",
-        email: "shop@example.com",
-        password: "password123",
-        businessName: "Bay Area Electric Co.",
-        ownerName: "John Smith",
-        phone: "(415) 555-0123",
-        address: "123 Main Street",
-        city: "San Francisco",
-        state: "CA",
-        zipCode: "94102",
-        licenseNumber: "C10-123456",
-        rating: 4.8,
-        jobsCompleted: 25,
-        createdAt: new Date().toISOString(),
-        profileComplete: true,
-      },
-      {
-        id: "apprentice-1",
-        type: "apprentice",
-        email: "apprentice@example.com",
-        password: "password123",
-        firstName: "Marcus",
-        lastName: "Chen",
-        phone: "(415) 555-0124",
-        address: "456 Oak Street",
-        city: "San Francisco",
-        state: "CA",
-        zipCode: "94103",
-        experienceLevel: "basic-experience",
-        availability: "full-time",
-        skills: ["Wiring Installation", "Safety Protocols", "Hand Tools"],
-        rating: 4.6,
-        jobsCompleted: 8,
-        hoursCompleted: "1200",
-        createdAt: new Date().toISOString(),
-        profileComplete: true,
-      },
-    ]
-
-    sampleUsers.forEach(saveUser)
+  if (typeof window === "undefined") return
+  try {
+    if (user) {
+      localStorage.setItem(CURRENT_USER_STORAGE_KEY, JSON.stringify(user))
+    } else {
+      localStorage.removeItem(CURRENT_USER_STORAGE_KEY)
+    }
+  } catch (error) {
+    console.error(`Error saving to localStorage key ${CURRENT_USER_STORAGE_KEY}:`, error)
   }
 }
