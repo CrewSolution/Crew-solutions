@@ -1,49 +1,22 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useToast } from "@/hooks/use-toast"
-import {
-  getCurrentUser,
-  getJobInvitations,
-  updateJobInvitationStatus,
-  getActiveJobs,
-  createReview,
-  updateActiveJob,
-  createActiveJob,
-  type User,
-  type JobInvitation,
-  type ActiveJob,
-  type Review,
-} from "@/lib/storage"
+import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { StarIcon, Zap } from "lucide-react"
-import Link from "next/link"
-import { Textarea } from "@/components/ui/textarea"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { Star, Briefcase, MapPin, DollarSign, Clock, GraduationCap, PenToolIcon as Tool, Car, Zap } from "lucide-react"
+import { getCurrentUser, getActiveJobs, getJobInvitations } from "@/lib/storage"
+import type { User, ActiveJob, JobInvitation } from "@/lib/db"
 
-export default function ApprenticeDashboard() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [incomingJobs, setIncomingJobs] = useState<JobInvitation[]>([])
-  const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([])
-  const [jobToReview, setJobToReview] = useState<ActiveJob | null>(null)
-  const [reviewForm, setReviewForm] = useState({
-    jobId: "",
-    revieweeId: "",
-    reviewerType: "apprentice" as "shop" | "apprentice",
-    rating: 5,
-    comment: "",
-    jobTitle: "",
-  })
-  const [isLoading, setIsLoading] = useState(true)
+export default function ApprenticeDashboardPage() {
   const router = useRouter()
-  const { toast } = useToast()
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([])
+  const [pendingInvitations, setPendingInvitations] = useState<JobInvitation[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const user = getCurrentUser()
@@ -52,309 +25,215 @@ export default function ApprenticeDashboard() {
       return
     }
     setCurrentUser(user)
-    fetchData(user.id)
+
+    const fetchData = async () => {
+      try {
+        const [active, invitations] = await Promise.all([
+          getActiveJobs(user.id, "apprentice"),
+          getJobInvitations(user.id, "pending"),
+        ])
+        setActiveJobs(active)
+        setPendingInvitations(invitations)
+      } catch (err) {
+        console.error("Failed to fetch dashboard data:", err)
+        setError("Failed to load dashboard data. Please try again.")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
   }, [router])
 
-  const fetchData = async (apprenticeId: string) => {
-    setIsLoading(true)
-    try {
-      const invitations = await getJobInvitations(apprenticeId, "pending")
-      setIncomingJobs(invitations)
-
-      const active = await getActiveJobs(apprenticeId, "apprentice", "in-progress")
-      setActiveJobs(active)
-    } catch (error: any) {
-      toast({
-        title: "Error loading data",
-        description: error.message || "Failed to fetch dashboard data.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleAcceptJob = async (invitation: JobInvitation) => {
-    if (!currentUser) return
-    try {
-      await updateJobInvitationStatus(invitation.id, "accepted")
-      // Create an active job entry
-      await createActiveJob({
-        jobPostingId: invitation.jobPostingId,
-        shopId: invitation.shopId,
-        apprenticeId: currentUser.id,
-        title: invitation.title,
-        shopName: invitation.shopName,
-        apprenticeName: `${currentUser.firstName} ${currentUser.lastName?.charAt(0)}.`,
-        startDate: invitation.startDate,
-        totalDays: invitation.daysNeeded,
-        hoursPerDay: invitation.hoursPerDay,
-        payRate: invitation.payRate,
-        status: "in-progress",
-        daysWorked: 0,
-        totalHours: 0,
-        pendingHours: 0,
-        canComplete: false,
-        canSubmitHours: true, // Apprentice can submit hours
-      })
-      toast({ title: "Job accepted!", description: `You've accepted ${invitation.title}.` })
-      fetchData(currentUser.id) // Refresh data
-    } catch (error: any) {
-      toast({
-        title: "Error accepting job",
-        description: error.message || "Failed to accept job.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleDeclineJob = async (invitation: JobInvitation) => {
-    if (!currentUser) return
-    try {
-      await updateJobInvitationStatus(invitation.id, "declined")
-      toast({ title: "Job declined", description: `You've declined ${invitation.title}.` })
-      fetchData(currentUser.id) // Refresh data
-    } catch (error: any) {
-      toast({
-        title: "Error declining job",
-        description: error.message || "Failed to decline job.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleCompleteJob = (job: ActiveJob) => {
-    setJobToReview(job)
-    setReviewForm((prev) => ({
-      ...prev,
-      jobId: job.id,
-      revieweeId: job.shopId, // Apprentice reviews the shop
-      jobTitle: job.title,
-    }))
-  }
-
-  const handleReviewChange = (field: string, value: any) => {
-    setReviewForm((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const submitReview = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!currentUser || !jobToReview) return
-
-    try {
-      const reviewData: Omit<Review, "id" | "date"> = {
-        ...reviewForm,
-        reviewerId: currentUser.id,
-        reviewerType: "apprentice",
-      }
-      await createReview(reviewData)
-
-      // Update active job status to 'reviewed'
-      await updateActiveJob(jobToReview.id, { status: "reviewed" })
-
-      toast({ title: "Review submitted and job completed!" })
-      setJobToReview(null)
-      setReviewForm({
-        jobId: "",
-        revieweeId: "",
-        reviewerType: "apprentice",
-        rating: 5,
-        comment: "",
-        jobTitle: "",
-      })
-      fetchData(currentUser.id) // Refresh active jobs
-    } catch (error: any) {
-      toast({
-        title: "Error submitting review",
-        description: error.message || "Failed to submit review.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <p>Loading dashboard...</p>
+      <div className="flex min-h-screen items-center justify-center bg-yellow-50">
+        <Zap className="h-12 w-12 animate-spin text-yellow-500" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-red-50 text-red-700">
+        <p>{error}</p>
       </div>
     )
   }
 
   if (!currentUser) {
-    return null // Should redirect to login
+    return null // Should redirect by now
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <header className="px-4 lg:px-6 h-14 flex items-center border-b">
-        <Link href="/" className="flex items-center justify-center gap-2">
-          <Zap className="h-6 w-6 text-yellow-500" />
-          <span className="text-lg font-bold">Crew Solutions</span>
-        </Link>
-        <nav className="ml-auto flex gap-4 sm:gap-6">
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setCurrentUser(null)
-              router.push("/login")
-            }}
-          >
-            Logout
-          </Button>
-        </nav>
+    <div className="min-h-screen bg-yellow-50 p-8">
+      <header className="mb-8 flex items-center justify-between">
+        <h1 className="text-4xl font-bold text-gray-900">Apprentice Dashboard</h1>
+        <Button className="bg-yellow-500 hover:bg-yellow-600">Find Electrical Jobs</Button>
       </header>
-      <main className="flex-1 p-4 md:p-6">
-        <div className="max-w-6xl mx-auto grid gap-6">
-          <h1 className="text-3xl font-bold">Apprentice Dashboard</h1>
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  Welcome, {currentUser.firstName} {currentUser.lastName?.charAt(0)}!
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-500">Manage your job applications and active projects.</p>
-                <div className="mt-4 flex items-center gap-2">
-                  <StarIcon className="w-5 h-5 fill-yellow-500 text-yellow-500" />
-                  <span className="font-medium">{currentUser.rating?.toFixed(1) || "N/A"} Stars</span>
-                  <span className="text-gray-500">({currentUser.jobsCompleted || 0} Jobs Completed)</span>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Your Profile</CardTitle>
-              </CardHeader>
-              <CardContent className="flex items-center gap-4">
-                <Avatar className="h-20 w-20">
-                  <AvatarImage src={currentUser.profileImage || "/placeholder.svg?height=80&width=80"} />
-                  <AvatarFallback>
-                    {currentUser.firstName?.[0]}
-                    {currentUser.lastName?.[0]}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="grid gap-1">
-                  <p className="font-semibold">{currentUser.email}</p>
-                  <p className="text-sm text-gray-500">Experience: {currentUser.experienceLevel}</p>
-                  <p className="text-sm text-gray-500">Availability: {currentUser.availability}</p>
-                  <p className="text-sm text-gray-500">Skills: {currentUser.skills?.join(", ")}</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
 
-          <Tabs defaultValue="incoming-jobs" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="incoming-jobs">Incoming Job Requests</TabsTrigger>
-              <TabsTrigger value="active-jobs">Active Jobs</TabsTrigger>
-            </TabsList>
-            <TabsContent value="incoming-jobs">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Incoming Job Requests</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                  {incomingJobs.length === 0 ? (
-                    <p className="text-gray-500">No new job requests at the moment.</p>
-                  ) : (
-                    incomingJobs.map((job) => (
-                      <div
-                        key={job.id}
-                        className="border p-4 rounded-md flex flex-col md:flex-row justify-between items-start md:items-center"
-                      >
-                        <div>
-                          <h3 className="font-semibold text-lg">{job.title}</h3>
-                          <p className="text-sm text-gray-500">Shop: {job.shopName}</p>
-                          <p className="text-sm text-gray-500">Pay: {job.payRate}</p>
-                          <p className="text-sm text-gray-500">Start Date: {job.startDate}</p>
-                          <p className="text-sm text-gray-500">Days Needed: {job.daysNeeded}</p>
-                          <p className="text-sm text-gray-500">Hours/Day: {job.hoursPerDay}</p>
-                          <p className="text-sm text-gray-500">Work Days: {job.workDays.join(", ")}</p>
-                          <p className="text-sm text-gray-500">Required Skills: {job.requiredSkills.join(", ")}</p>
-                          <p className="text-sm text-gray-500">Description: {job.description}</p>
-                        </div>
-                        <div className="mt-4 md:mt-0 flex gap-2">
-                          <Button onClick={() => handleAcceptJob(job)}>Accept</Button>
-                          <Button variant="outline" onClick={() => handleDeclineJob(job)}>
-                            Decline
-                          </Button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-            <TabsContent value="active-jobs">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Active Jobs</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                  {activeJobs.length === 0 ? (
-                    <p className="text-gray-500">No active jobs at the moment.</p>
-                  ) : (
-                    activeJobs.map((job) => (
-                      <div
-                        key={job.id}
-                        className="border p-4 rounded-md flex flex-col md:flex-row justify-between items-start md:items-center"
-                      >
-                        <div>
-                          <h3 className="font-semibold text-lg">{job.title}</h3>
-                          <p className="text-sm text-gray-500">Shop: {job.shopName}</p>
-                          <p className="text-sm text-gray-500">Start Date: {job.startDate}</p>
-                          <p className="text-sm text-gray-500">Status: {job.status}</p>
-                        </div>
-                        <div className="mt-4 md:mt-0">
-                          <Button onClick={() => handleCompleteJob(job)}>Complete Job & Review</Button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+        {/* Apprentice Profile Card */}
+        <Card className="col-span-1 border-yellow-200 shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-lg font-medium text-yellow-600">Your Electrical Profile</CardTitle>
+            <Briefcase className="h-5 w-5 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-4">
+              <Avatar className="h-20 w-20">
+                <AvatarImage
+                  src={currentUser.profile_image || "/placeholder.svg?height=80&width=80"}
+                  alt="Apprentice Avatar"
+                />
+                <AvatarFallback>{currentUser.first_name ? currentUser.first_name[0] : "A"}</AvatarFallback>
+              </Avatar>
+              <div>
+                <h2 className="text-2xl font-bold">
+                  {currentUser.first_name} {currentUser.last_name}
+                </h2>
+                <p className="text-sm text-gray-500">{currentUser.experience_level || "N/A"}</p>
+                <div className="flex items-center text-sm text-gray-600">
+                  <MapPin className="mr-1 h-4 w-4" />
+                  <span>
+                    {currentUser.city}, {currentUser.state}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 space-y-2 text-sm text-gray-700">
+              <p>
+                <strong>Availability:</strong> {currentUser.availability || "N/A"}
+              </p>
+              <p>
+                <strong>Hourly Rate:</strong> ${currentUser.hourly_rate_min || "N/A"} - $
+                {currentUser.hourly_rate_max || "N/A"}
+              </p>
+              <div className="flex items-center">
+                <Star className="mr-1 h-4 w-4 text-yellow-500" />
+                <span>
+                  {currentUser.rating?.toFixed(1) || "N/A"} ({currentUser.jobs_completed || 0} jobs)
+                </span>
+              </div>
+              <div className="flex items-center">
+                <GraduationCap className="mr-1 h-4 w-4" />
+                <span>{currentUser.education || "N/A"}</span>
+              </div>
+              <div className="flex items-center">
+                <Tool className="mr-1 h-4 w-4" />
+                <span>Tools: {currentUser.has_own_tools ? "Yes" : "No"}</span>
+              </div>
+              <div className="flex items-center">
+                <Car className="mr-1 h-4 w-4" />
+                <span>Transportation: {currentUser.has_transportation ? "Yes" : "No"}</span>
+              </div>
+              <div className="flex items-center">
+                <MapPin className="mr-1 h-4 w-4" />
+                <span>Travel: {currentUser.willing_to_travel ? "Yes" : "No"}</span>
+              </div>
+            </div>
+            <div className="mt-4">
+              <h3 className="font-semibold text-gray-800">Skills:</h3>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {currentUser.skills && currentUser.skills.length > 0 ? (
+                  currentUser.skills.map((skill, index) => (
+                    <Badge key={index} variant="secondary" className="bg-yellow-100 text-yellow-700">
+                      {skill}
+                    </Badge>
+                  ))
+                ) : (
+                  <p className="text-gray-500">No skills listed.</p>
+                )}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              className="mt-4 w-full border-yellow-300 text-yellow-600 hover:bg-yellow-50 bg-transparent"
+            >
+              Edit Profile
+            </Button>
+          </CardContent>
+        </Card>
 
-          {jobToReview && (
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle>Review Shop for {jobToReview.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={submitReview} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="rating">Rating (1-5 Stars)</Label>
-                    <Input
-                      id="rating"
-                      type="number"
-                      value={reviewForm.rating}
-                      onChange={(e) => handleReviewChange("rating", Number.parseInt(e.target.value))}
-                      min="1"
-                      max="5"
-                      required
-                    />
+        {/* Active Jobs */}
+        <Card className="col-span-2 border-yellow-200 shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-lg font-medium text-yellow-600">Your Active Electrical Jobs</CardTitle>
+            <Briefcase className="h-5 w-5 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            {activeJobs.length > 0 ? (
+              activeJobs.map((job) => (
+                <div key={job.id} className="mb-4 border-b pb-4 last:mb-0 last:border-b-0 last:pb-0">
+                  <h3 className="font-semibold text-gray-800">{job.title}</h3>
+                  <p className="text-sm text-gray-600">Shop: {job.shop_name}</p>
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Clock className="mr-1 h-4 w-4" />
+                    <span>
+                      Hours: {job.total_hours} / {job.total_days * job.hours_per_day}
+                    </span>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="comment">Comment</Label>
-                    <Textarea
-                      id="comment"
-                      value={reviewForm.comment}
-                      onChange={(e) => handleReviewChange("comment", e.target.value)}
-                      placeholder="Share your feedback on the shop's communication, project management, etc."
-                      required
-                    />
+                  <div className="flex items-center text-sm text-gray-500">
+                    <DollarSign className="mr-1 h-4 w-4" />
+                    <span>Pay: {job.pay_rate}</span>
                   </div>
-                  <Button type="submit" className="w-full">
-                    Submit Review
+                  <Badge variant="outline" className="mt-2 bg-yellow-100 text-yellow-700">
+                    {job.status}
+                  </Badge>
+                  <Button variant="link" className="text-yellow-600 hover:text-yellow-700">
+                    View Details
                   </Button>
-                </form>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </main>
+                </div>
+              ))
+            ) : (
+              <p className="text-center text-gray-500">No active jobs.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Pending Invitations */}
+        <Card className="col-span-2 border-yellow-200 shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-lg font-medium text-yellow-600">Pending Electrical Job Invitations</CardTitle>
+            <Briefcase className="h-5 w-5 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            {pendingInvitations.length > 0 ? (
+              pendingInvitations.map((invitation) => (
+                <div key={invitation.id} className="mb-4 border-b pb-4 last:mb-0 last:border-b-0 last:pb-0">
+                  <h3 className="font-semibold text-gray-800">{invitation.title}</h3>
+                  <p className="text-sm text-gray-600">From: {invitation.shop_name}</p>
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Clock className="mr-1 h-4 w-4" />
+                    <span>Days Needed: {invitation.days_needed}</span>
+                  </div>
+                  <div className="flex items-center text-sm text-gray-500">
+                    <DollarSign className="mr-1 h-4 w-4" />
+                    <span>Pay: {invitation.pay_rate}</span>
+                  </div>
+                  <div className="mt-2 flex justify-end space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-yellow-300 text-yellow-600 hover:bg-yellow-50 bg-transparent"
+                    >
+                      View Details
+                    </Button>
+                    <Button size="sm" className="bg-yellow-500 hover:bg-yellow-600">
+                      Accept
+                    </Button>
+                    <Button variant="destructive" size="sm">
+                      Decline
+                    </Button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-center text-gray-500">No pending invitations.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

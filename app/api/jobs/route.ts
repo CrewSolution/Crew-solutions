@@ -4,38 +4,22 @@ import { sql } from "@/lib/db"
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const shopId = searchParams.get("shop_id")
-    const status = searchParams.get("status")
+    const shopId = searchParams.get("shopId")
 
-    let jobs
-    if (shopId && status) {
-      jobs = await sql`
-        SELECT * FROM job_postings 
-        WHERE shop_id = ${shopId} AND status = ${status}
-        ORDER BY created_at DESC
-      `
-    } else if (shopId) {
-      jobs = await sql`
-        SELECT * FROM job_postings 
-        WHERE shop_id = ${shopId}
-        ORDER BY created_at DESC
-      `
-    } else if (status) {
-      jobs = await sql`
-        SELECT * FROM job_postings 
-        WHERE status = ${status}
-        ORDER BY created_at DESC
+    let jobPostings
+    if (shopId) {
+      jobPostings = await sql`
+        SELECT * FROM job_postings WHERE shop_id = ${shopId} ORDER BY posted_date DESC
       `
     } else {
-      jobs = await sql`
-        SELECT * FROM job_postings 
-        ORDER BY created_at DESC
+      jobPostings = await sql`
+        SELECT * FROM job_postings ORDER BY posted_date DESC
       `
     }
 
-    return NextResponse.json(jobs)
+    return NextResponse.json({ jobPostings })
   } catch (error) {
-    console.error("Get jobs error:", error)
+    console.error("Get job postings error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -48,23 +32,21 @@ export async function POST(request: NextRequest) {
       INSERT INTO job_postings (
         shop_id, title, description, apprentices_needed, expected_duration,
         days_needed, start_date, hours_per_day, work_days, pay_rate,
-        requirements, required_skills, priority, status, applicants,
-        total_cost, weekly_payment
+        requirements, required_skills, priority, status, applicants, posted_date
       ) VALUES (
-        ${jobData.shop_id}, ${jobData.title}, ${jobData.description},
-        ${jobData.apprentices_needed}, ${jobData.expected_duration || null},
-        ${jobData.days_needed}, ${jobData.start_date}, ${jobData.hours_per_day},
-        ${jobData.work_days || []}, ${jobData.pay_rate}, ${jobData.requirements || []},
-        ${jobData.required_skills || []}, ${jobData.priority || "medium"},
-        ${jobData.status || "active"}, ${jobData.applicants || 0},
-        ${jobData.total_cost || null}, ${jobData.weekly_payment || null}
+        ${jobData.shop_id}, ${jobData.title}, ${jobData.description}, ${jobData.apprentices_needed},
+        ${jobData.expected_duration || null}, ${jobData.days_needed}, ${jobData.start_date},
+        ${jobData.hours_per_day}, ${sql.array(jobData.work_days)}, ${jobData.pay_rate},
+        ${jobData.requirements ? sql.array(jobData.requirements) : null},
+        ${jobData.required_skills ? sql.array(jobData.required_skills) : null},
+        ${jobData.priority}, ${jobData.status}, ${jobData.applicants}, NOW()
       )
       RETURNING *
     `
 
-    return NextResponse.json(result[0], { status: 201 })
+    return NextResponse.json({ jobPosting: result[0] }, { status: 201 })
   } catch (error) {
-    console.error("Create job error:", error)
+    console.error("Create job posting error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

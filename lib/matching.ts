@@ -105,3 +105,30 @@ export const getRecommendedJobs = (apprentice: User, jobs: JobPosting[]): JobPos
     .filter((job) => job.matchScore > 30)
     .sort((a, b) => b.matchScore - a.matchScore)
 }
+
+export function matchApprenticesToJobs(apprentices: any[], jobPostings: any[]): any[] {
+  // Placeholder for a more sophisticated matching algorithm
+  // For now, it returns a simple match based on basic criteria
+  const matches: any[] = []
+
+  jobPostings.forEach((job) => {
+    apprentices.forEach((apprentice) => {
+      // Example: simple match if apprentice has at least one required skill
+      const hasRequiredSkills =
+        job.required_skills && job.required_skills.some((skill: string) => apprentice.skills?.includes(skill))
+
+      // Example: simple match if apprentice is available for the job's duration
+      const isAvailable = apprentice.availability === "Full-time" || apprentice.availability === "Flexible"
+
+      if (hasRequiredSkills && isAvailable) {
+        matches.push({
+          jobId: job.id,
+          apprenticeId: apprentice.id,
+          score: 1, // Simple score
+        })
+      }
+    })
+  })
+
+  return matches
+}

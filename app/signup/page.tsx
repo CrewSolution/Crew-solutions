@@ -46,13 +46,13 @@ export default function SignupPage() {
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2 bg-yellow-100">
                 <TabsTrigger value="shop" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">
-                  Shop Owner
+                  Electrical Shop Owner
                 </TabsTrigger>
                 <TabsTrigger
                   value="apprentice"
                   className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white"
                 >
-                  Apprentice
+                  Electrical Apprentice
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="shop" className="mt-6">

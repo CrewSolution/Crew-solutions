@@ -79,6 +79,12 @@ export async function POST(request: NextRequest) {
     const saltRounds = 10
     const hashedPassword = await bcrypt.hash(userData.password, saltRounds)
 
+    // Handle skills array for PostgreSQL
+    const skillsArray =
+      userData.skills && Array.isArray(userData.skills) && userData.skills.length > 0
+        ? sql.array(userData.skills)
+        : null
+
     // Insert user
     const result = await sql`
       INSERT INTO users (
@@ -92,7 +98,7 @@ export async function POST(request: NextRequest) {
         ${userData.state || null}, ${userData.zip_code || null}, ${userData.business_name || null},
         ${userData.owner_name || null}, ${userData.business_type || null}, 
         ${userData.years_in_business || null}, ${userData.license_number || null},
-        ${userData.experience_level || null}, ${userData.skills || null}, 
+        ${userData.experience_level || null}, ${skillsArray}, 
         ${userData.availability || null}, ${userData.hourly_rate_min || null},
         ${userData.hourly_rate_max || null}, ${userData.education || null}, 
         ${userData.bio || null}, ${userData.willing_to_travel || false},

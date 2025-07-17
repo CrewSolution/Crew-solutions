@@ -4,43 +4,26 @@ import { sql } from "@/lib/db"
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const shopId = searchParams.get("shop_id")
-    const apprenticeId = searchParams.get("apprentice_id")
+    const shopId = searchParams.get("shopId")
+    const apprenticeId = searchParams.get("apprenticeId")
     const status = searchParams.get("status")
 
-    let jobs
-    if (shopId && status) {
-      jobs = await sql`
-        SELECT * FROM active_jobs 
-        WHERE shop_id = ${shopId} AND status = ${status}
-        ORDER BY created_at DESC
-      `
-    } else if (apprenticeId && status) {
-      jobs = await sql`
-        SELECT * FROM active_jobs 
-        WHERE apprentice_id = ${apprenticeId} AND status = ${status}
-        ORDER BY created_at DESC
-      `
-    } else if (shopId) {
-      jobs = await sql`
-        SELECT * FROM active_jobs 
-        WHERE shop_id = ${shopId}
-        ORDER BY created_at DESC
+    let activeJobs
+    if (shopId) {
+      activeJobs = await sql`
+        SELECT * FROM active_jobs WHERE shop_id = ${shopId} ${status ? sql`AND status = ${status}` : sql``} ORDER BY created_at DESC
       `
     } else if (apprenticeId) {
-      jobs = await sql`
-        SELECT * FROM active_jobs 
-        WHERE apprentice_id = ${apprenticeId}
-        ORDER BY created_at DESC
+      activeJobs = await sql`
+        SELECT * FROM active_jobs WHERE apprentice_id = ${apprenticeId} ${status ? sql`AND status = ${status}` : sql``} ORDER BY created_at DESC
       `
     } else {
-      jobs = await sql`
-        SELECT * FROM active_jobs 
-        ORDER BY created_at DESC
+      activeJobs = await sql`
+        SELECT * FROM active_jobs ORDER BY created_at DESC
       `
     }
 
-    return NextResponse.json(jobs)
+    return NextResponse.json({ activeJobs })
   } catch (error) {
     console.error("Get active jobs error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -54,20 +37,20 @@ export async function POST(request: NextRequest) {
     const result = await sql`
       INSERT INTO active_jobs (
         job_posting_id, shop_id, apprentice_id, title, shop_name, apprentice_name,
-        start_date, total_days, hours_per_day, pay_rate, status, days_worked,
-        total_hours, pending_hours, can_complete, can_submit_hours
+        start_date, total_days, hours_per_day, pay_rate, status,
+        days_worked, total_hours, pending_hours, can_complete, can_submit_hours
       ) VALUES (
         ${jobData.job_posting_id || null}, ${jobData.shop_id}, ${jobData.apprentice_id},
         ${jobData.title}, ${jobData.shop_name}, ${jobData.apprentice_name},
         ${jobData.start_date}, ${jobData.total_days}, ${jobData.hours_per_day},
-        ${jobData.pay_rate}, ${jobData.status || "in-progress"}, ${jobData.days_worked || 0},
-        ${jobData.total_hours || 0}, ${jobData.pending_hours || 0},
-        ${jobData.can_complete || false}, ${jobData.can_submit_hours || true}
+        ${jobData.pay_rate}, ${jobData.status}, ${jobData.days_worked},
+        ${jobData.total_hours}, ${jobData.pending_hours}, ${jobData.can_complete},
+        ${jobData.can_submit_hours}
       )
       RETURNING *
     `
 
-    return NextResponse.json(result[0], { status: 201 })
+    return NextResponse.json({ activeJob: result[0] }, { status: 201 })
   } catch (error) {
     console.error("Create active job error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
