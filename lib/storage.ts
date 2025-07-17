@@ -141,28 +141,30 @@ const API_BASE_URL = "/api"
 async function fetchData<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options)
 
-  // Try to decode the body as JSON first.
-  async function parseBody() {
+  // Always read the body as text first
+  const text = await response.text()
+
+  // Helper: attempt JSON parse
+  const tryJson = () => {
     try {
-      return await response.json()
+      return text ? JSON.parse(text) : null
     } catch {
-      // If JSON fails, return plain text instead.
-      const text = await response.text()
-      return { message: text }
+      return null
     }
   }
 
-  const data = await parseBody()
+  const data = tryJson()
 
   if (!response.ok) {
-    // data may be an object (parsed JSON) or `{ message: string }` fallback
+    // Prefer JSON.message, otherwise plain text or generic
     const message =
-      (typeof data === "object" && data !== null && "message" in data && (data as any).message) ||
-      `Request failed with status ${response.status}`
-    throw new Error(message as string)
+      (data && typeof data === "object" && "message" in data ? (data as any).message : text) ||
+      `Request failed (${response.status})`
+    throw new Error(message)
   }
 
-  return data as T
+  // If data is null (e.g. empty 204 response) cast as unknown
+  return (data ?? ({} as unknown)) as T
 }
 
 // User management
