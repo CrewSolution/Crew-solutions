@@ -2,6 +2,20 @@ import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 import bcrypt from "bcryptjs"
 
+// Helper to convert snake_case to camelCase recursively
+function toCamelCase(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map((v) => toCamelCase(v))
+  } else if (obj !== null && typeof obj === "object") {
+    return Object.keys(obj).reduce((acc: any, key: string) => {
+      const camelKey = key.replace(/_([a-z])/g, (_, char) => char.toUpperCase())
+      acc[camelKey] = toCamelCase(obj[key])
+      return acc
+    }, {})
+  }
+  return obj
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json()
@@ -28,11 +42,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
     }
 
-    // Remove password hash from response
-    const { password_hash, ...userWithoutPassword } = user
+    // Remove password hash and convert to camelCase
+    const { password_hash, ...userWithoutPasswordHash } = user
+    const camelCaseUser = toCamelCase(userWithoutPasswordHash)
 
     return NextResponse.json({
-      user: userWithoutPassword,
+      user: camelCaseUser,
       message: "Login successful",
     })
   } catch (error) {

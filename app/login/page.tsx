@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Zap, Eye, EyeOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { setCurrentUser } from "@/lib/storage" // Import setCurrentUser
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -39,8 +40,8 @@ export default function LoginPage() {
       if (response.ok) {
         toast({ title: "Login successful", description: "Welcome back!" })
 
-        // Persist the user locally for demo purposes
-        localStorage.setItem("currentUser", JSON.stringify(data.user))
+        // Persist the user locally for demo purposes using setCurrentUser
+        setCurrentUser(data.user)
 
         router.push(data.user.type === "shop" ? "/dashboard/shop" : "/dashboard/apprentice")
       } else {

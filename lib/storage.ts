@@ -1,238 +1,237 @@
-/**
- * Local-storage demo data layer for Crew Solutions.
- * Replace with real API/database calls when you wire up a backend.
- */
+import type { User, JobPosting, JobInvitation, ActiveJob, Review, TimeEntry } from "./db"
 
-///////////////////////
-// Type Definitions //
-///////////////////////
-export interface User {
-  id: string
-  email: string
-  type: "shop" | "apprentice"
-  firstName?: string
-  lastName?: string
-  phone?: string
-  city?: string
-  state?: string
-  zipCode?: string
-  profileImage?: string
-  rating?: number
-  jobsCompleted?: number
-
-  /* Shop-specific */
-  businessName?: string
-  ownerName?: string
-  businessType?: string
-  yearsInBusiness?: number
-  licenseNumber?: string
-
-  /* Apprentice-specific */
-  experienceLevel?: string
-  skills?: string[]
-  availability?: string
-  hourlyRateMin?: number
-  hourlyRateMax?: number
-  education?: string
-  bio?: string
-  willingToTravel?: boolean
-  hasOwnTools?: boolean
-  hasTransportation?: boolean
-}
-
-export interface JobPosting {
-  id: string
-  shopId: string
-  title: string
-  description: string
-  apprenticesNeeded: number
-  expectedDuration?: string
-  daysNeeded: number
-  startDate: string
-  hoursPerDay: number
-  workDays: string[]
-  payRate: string
-  requirements?: string[]
-  requiredSkills?: string[]
-  priority: "high" | "medium" | "low"
-  status: "active" | "filled" | "cancelled"
-  applicants: number
-  postedDate: string
-}
-
-export interface JobInvitation {
-  id: string
-  jobPostingId: string
-  shopId: string
-  apprenticeId: string
-  shopName: string
-  title: string
-  description: string
-  payRate: string
-  daysNeeded: number
-  startDate: string
-  hoursPerDay: number
-  workDays: string[]
-  requirements?: string[]
-  requiredSkills?: string[]
-  status: "pending" | "accepted" | "declined"
-}
-
-export interface ActiveJob {
-  id: string
-  jobPostingId?: string
-  shopId: string
-  apprenticeId: string
-  title: string
-  shopName: string
-  apprenticeName: string
-  startDate: string
-  totalDays: number
-  hoursPerDay: number
-  payRate: string
-  status: "in-progress" | "completed" | "reviewed"
-  daysWorked: number
-  totalHours: number
-  pendingHours: number
-  canComplete: boolean
-  canSubmitHours: boolean
-}
-
-export interface Review {
-  id: string
-  jobId: string
-  reviewerId: string
-  revieweeId: string
-  reviewerType: "shop" | "apprentice"
-  rating: number
-  comment: string
-  jobTitle: string
-  date: string
-}
-
-export interface TimeEntry {
-  id: string
-  jobId: string
-  apprenticeId: string
-  date: string
-  hours: number
-  approved: boolean
-}
-
-/////////////////////
-// Local-storage 🔑 //
-/////////////////////
-const USERS_KEY = "crew_solutions_users"
-const CURRENT_USER_KEY = "crew_solutions_current_user"
-const JOB_POSTINGS_KEY = "crew_solutions_job_postings"
-const JOB_INVITATIONS_KEY = "crew_solutions_job_invitations"
-const ACTIVE_JOBS_KEY = "crew_solutions_active_jobs"
-const REVIEWS_KEY = "crew_solutions_reviews"
-
-const isBrowser = () => typeof window !== "undefined"
-
-function readJSON<T>(key: string): T[] {
-  if (!isBrowser()) return []
-  const raw = localStorage.getItem(key)
-  return raw ? (JSON.parse(raw) as T[]) : []
-}
-
-function writeJSON<T>(key: string, data: T[]): void {
-  if (isBrowser()) localStorage.setItem(key, JSON.stringify(data))
-}
-
-function uid(): string {
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`
-}
-
-//////////////////
-// Auth helpers //
-//////////////////
-export async function authenticateUser(email: string, _password: string): Promise<User | null> {
-  const users = readJSON<User>(USERS_KEY)
-  return users.find((u) => u.email === email) ?? null
-}
-
+// Helper function to get current user from localStorage
 export function getCurrentUser(): User | null {
-  if (!isBrowser()) return null
-  const raw = localStorage.getItem(CURRENT_USER_KEY)
-  return raw ? (JSON.parse(raw) as User) : null
+  if (typeof window === "undefined") {
+    return null
+  }
+  const userJson = localStorage.getItem("currentUser")
+  if (userJson) {
+    try {
+      return JSON.parse(userJson) as User
+    } catch (e) {
+      console.error("Failed to parse user from localStorage", e)
+      return null
+    }
+  }
+  return null
 }
 
-export function setCurrentUser(user: User | null): void {
-  if (!isBrowser()) return
-  if (user) localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user))
-  else localStorage.removeItem(CURRENT_USER_KEY)
+// Helper function to set current user in localStorage
+export function setCurrentUser(user: User | null) {
+  if (typeof window !== "undefined") {
+    if (user) {
+      localStorage.setItem("currentUser", JSON.stringify(user))
+    } else {
+      localStorage.removeItem("currentUser")
+    }
+  }
 }
 
-/////////////////////////
-// Sample-data seeding //
-/////////////////////////
-export function initializeSampleData(): void {
-  if (!isBrowser()) return
-  if (readJSON<User>(USERS_KEY).length) return
-
-  const sampleUsers: User[] = [
-    {
-      id: "shop-1",
-      email: "shop@example.com",
-      type: "shop",
-      businessName: "Elite Electrical Services",
-      ownerName: "John Smith",
-      firstName: "John",
-      lastName: "Smith",
-      phone: "(555) 123-4567",
-      city: "San Francisco",
-      state: "CA",
-      zipCode: "94102",
-      businessType: "Electrical Contractor",
-      yearsInBusiness: 15,
-      licenseNumber: "C-10 #123456",
-      rating: 4.8,
-      jobsCompleted: 127,
-    },
-    {
-      id: "apprentice-1",
-      email: "apprentice@example.com",
-      type: "apprentice",
-      firstName: "Sarah",
-      lastName: "Johnson",
-      phone: "(555) 987-6543",
-      city: "Oakland",
-      state: "CA",
-      zipCode: "94601",
-      experienceLevel: "Intermediate",
-      skills: ["Wiring Installation", "Circuit Analysis", "Blueprint Reading", "Safety Protocols"],
-      availability: "Full-time",
-      hourlyRateMin: 22,
-      hourlyRateMax: 28,
-      education: "Community College Electrical Program",
-      bio: "Dedicated electrical apprentice with 2 years of hands-on experience in residential and commercial projects.",
-      rating: 4.6,
-      jobsCompleted: 23,
-      willingToTravel: true,
-      hasOwnTools: true,
-      hasTransportation: true,
-    },
-  ]
-
-  writeJSON(USERS_KEY, sampleUsers)
+// --- User Operations ---
+export async function getUserById(id: string): Promise<User | null> {
+  const response = await fetch(`/api/users/${id}`)
+  if (!response.ok) {
+    throw new Error("Failed to fetch user")
+  }
+  const data = await response.json()
+  return data.user
 }
 
-////////////////////////////////////
-// Minimal stubs for future CRUDs //
-////////////////////////////////////
-export const createUser = async (user: Omit<User, "id">): Promise<User> => {
-  const users = readJSON<User>(USERS_KEY)
-  if (users.some((u) => u.email === user.email)) throw new Error("Email already exists")
-
-  const newUser: User = { ...user, id: uid(), rating: 0, jobsCompleted: 0 }
-  users.push(newUser)
-  writeJSON(USERS_KEY, users)
-  return newUser
+export async function createUser(
+  userData: Omit<User, "id" | "password_hash" | "created_at" | "updated_at" | "rating" | "jobs_completed"> & {
+    password: string
+  },
+): Promise<User> {
+  const response = await fetch("/api/users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(userData),
+  })
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || "Failed to create user")
+  }
+  const data = await response.json()
+  return data.user
 }
 
-// Initialize sample data when module loads
-if (isBrowser()) {
-  initializeSampleData()
+// --- Job Posting Operations ---
+export async function getJobPostings(shopId?: string): Promise<JobPosting[]> {
+  const url = shopId ? `/api/jobs?shopId=${shopId}` : "/api/jobs"
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error("Failed to fetch job postings")
+  }
+  const data = await response.json()
+  return data.jobPostings.map((job: any) => ({
+    ...job,
+    posted_date: new Date(job.posted_date),
+    created_at: new Date(job.created_at),
+    updated_at: new Date(job.updated_at),
+  }))
+}
+
+export async function createJobPosting(
+  jobData: Omit<JobPosting, "id" | "posted_date" | "created_at" | "updated_at">,
+): Promise<JobPosting> {
+  const response = await fetch("/api/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(jobData),
+  })
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || "Failed to create job posting")
+  }
+  const data = await response.json()
+  return data.jobPosting
+}
+
+// --- Job Invitation Operations ---
+export async function getJobInvitations(
+  apprenticeId: string,
+  status?: "pending" | "accepted" | "declined",
+): Promise<JobInvitation[]> {
+  const url = status
+    ? `/api/invitations?apprenticeId=${apprenticeId}&status=${status}`
+    : `/api/invitations?apprenticeId=${apprenticeId}`
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error("Failed to fetch job invitations")
+  }
+  const data = await response.json()
+  return data.jobInvitations.map((invitation: any) => ({
+    ...invitation,
+    created_at: new Date(invitation.created_at),
+    updated_at: new Date(invitation.updated_at),
+  }))
+}
+
+export async function updateJobInvitationStatus(id: string, status: "accepted" | "declined"): Promise<JobInvitation> {
+  const response = await fetch(`/api/invitations/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  })
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || "Failed to update invitation status")
+  }
+  const data = await response.json()
+  return data.jobInvitation
+}
+
+// --- Active Job Operations ---
+export async function getActiveJobs(
+  userId: string,
+  userType: "shop" | "apprentice",
+  status?: "in-progress" | "completed" | "reviewed",
+): Promise<ActiveJob[]> {
+  const url = `/api/active-jobs?${userType === "shop" ? `shopId=${userId}` : `apprenticeId=${userId}`}${status ? `&status=${status}` : ""}`
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error("Failed to fetch active jobs")
+  }
+  const data = await response.json()
+  return data.activeJobs.map((job: any) => ({
+    ...job,
+    created_at: new Date(job.created_at),
+    updated_at: new Date(job.updated_at),
+  }))
+}
+
+export async function createActiveJob(
+  jobData: Omit<ActiveJob, "id" | "created_at" | "updated_at">,
+): Promise<ActiveJob> {
+  const response = await fetch("/api/active-jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(jobData),
+  })
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || "Failed to create active job")
+  }
+  const data = await response.json()
+  return data.activeJob
+}
+
+export async function updateActiveJob(
+  id: string,
+  updateData: Partial<Omit<ActiveJob, "id" | "created_at" | "updated_at">>,
+): Promise<ActiveJob> {
+  const response = await fetch(`/api/active-jobs/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updateData),
+  })
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || "Failed to update active job")
+  }
+  const data = await response.json()
+  return data.activeJob
+}
+
+// --- Review Operations ---
+export async function createReview(reviewData: Omit<Review, "id" | "date" | "created_at">): Promise<Review> {
+  const response = await fetch("/api/reviews", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(reviewData),
+  })
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || "Failed to create review")
+  }
+  const data = await response.json()
+  return data.review
+}
+
+// --- Time Entry Operations ---
+export async function createTimeEntry(
+  timeEntryData: Omit<TimeEntry, "id" | "created_at" | "updated_at">,
+): Promise<TimeEntry> {
+  const response = await fetch("/api/time-entries", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(timeEntryData),
+  })
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || "Failed to create time entry")
+  }
+  const data = await response.json()
+  return data.timeEntry
+}
+
+export async function getTimeEntries(jobId: string): Promise<TimeEntry[]> {
+  const response = await fetch(`/api/time-entries?jobId=${jobId}`)
+  if (!response.ok) {
+    throw new Error("Failed to fetch time entries")
+  }
+  const data = await response.json()
+  return data.timeEntries.map((entry: any) => ({
+    ...entry,
+    created_at: new Date(entry.created_at),
+    updated_at: new Date(entry.updated_at),
+  }))
+}
+
+export async function updateTimeEntry(
+  id: string,
+  updateData: Partial<Omit<TimeEntry, "id" | "created_at" | "updated_at">>,
+): Promise<TimeEntry> {
+  const response = await fetch(`/api/time-entries/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updateData),
+  })
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || "Failed to update time entry")
+  }
+  const data = await response.json()
+  return data.timeEntry
 }
