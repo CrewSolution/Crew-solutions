@@ -2,297 +2,194 @@
 
 import type React from "react"
 
-import { useState, useEffect, useCallback } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Star, ArrowLeft, Zap } from "lucide-react"
-import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import {
   getCurrentUser,
   getActiveJobById,
   createReview,
   updateActiveJob,
-  updateUser,
   type User,
   type ActiveJob,
+  type Review,
 } from "@/lib/storage"
+import Link from "next/link"
+import { Zap } from "lucide-react" // Import Zap from lucide-react
 
-export default function JobReviewPage() {
+export default function ReviewPage({ params }: { params: { id: string } }) {
+  const { id: jobId } = params
   const router = useRouter()
-  const params = useParams()
-  const jobId = params.id as string
-  const [currentUser, setCurrentUserState] = useState<User | null>(null)
-  const [jobData, setJobData] = useState<ActiveJob | null>(null)
-  const [shopUser, setShopUser] = useState<User | null>(null) // To get shop's full name
-  const [rating, setRating] = useState(0)
-  const [comment, setComment] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const { toast } = useToast()
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [job, setJob] = useState<ActiveJob | null>(null)
+  const [reviewForm, setReviewForm] = useState({
+    rating: 5,
+    comment: "",
+  })
+  const [isLoading, setIsLoading] = useState(true)
 
-  const loadJobAndUser = useCallback(async () => {
+  useEffect(() => {
     const user = getCurrentUser()
     if (!user) {
       router.push("/login")
       return
     }
-    setCurrentUserState(user)
+    setCurrentUser(user)
+    fetchJobData(user.id, jobId)
+  }, [router, jobId])
 
-    if (!jobId) {
-      toast({
-        title: "Error",
-        description: "Job ID is missing.",
-        variant: "destructive",
-      })
-      router.push("/dashboard/apprentice")
-      return
-    }
-
+  const fetchJobData = async (userId: string, currentJobId: string) => {
+    setIsLoading(true)
     try {
-      const activeJob = await getActiveJobById(jobId)
-      if (!activeJob || activeJob.apprenticeId !== user.id) {
+      const fetchedJob = await getActiveJobById(currentJobId)
+      if (fetchedJob.status === "reviewed") {
         toast({
-          title: "Unauthorized",
-          description: "You are not authorized to review this job.",
-          variant: "destructive",
+          title: "Already Reviewed",
+          description: "This job has already been reviewed.",
+          variant: "default",
         })
-        router.push("/dashboard/apprentice")
+        router.push(userId === fetchedJob.shopId ? "/dashboard/shop" : "/dashboard/apprentice")
         return
       }
-      setJobData(activeJob)
-
-      // Fetch shop details
-      const shop = await updateUser(activeJob.shopId, {}) // Fetch full shop data
-      setShopUser(shop)
-    } catch (error) {
-      console.error("Failed to load job data:", error)
+      if (fetchedJob.apprenticeId !== userId && fetchedJob.shopId !== userId) {
+        toast({
+          title: "Access Denied",
+          description: "You do not have permission to review this job.",
+          variant: "destructive",
+        })
+        router.push(userId === fetchedJob.shopId ? "/dashboard/shop" : "/dashboard/apprentice")
+        return
+      }
+      setJob(fetchedJob)
+    } catch (error: any) {
       toast({
-        title: "Error",
-        description: "Failed to load job details. Please try again.",
+        title: "Error loading job",
+        description: error.message || "Failed to fetch job details for review.",
         variant: "destructive",
       })
-      router.push("/dashboard/apprentice")
-    }
-  }, [router, jobId, toast])
-
-  useEffect(() => {
-    loadJobAndUser()
-  }, [loadJobAndUser])
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-
-    if (!currentUser || !jobData || !shopUser) {
-      toast({
-        title: "Error",
-        description: "Missing user or job data.",
-        variant: "destructive",
-      })
-      setIsSubmitting(false)
-      return
-    }
-
-    if (rating === 0) {
-      toast({
-        title: "Missing Rating",
-        description: "Please provide a rating.",
-        variant: "destructive",
-      })
-      setIsSubmitting(false)
-      return
-    }
-
-    try {
-      // Create review
-      await createReview({
-        jobId: jobData.id,
-        reviewerId: currentUser.id,
-        revieweeId: jobData.shopId,
-        reviewerType: "apprentice",
-        rating: rating,
-        comment: comment,
-        jobTitle: jobData.title,
-      })
-
-      // Update active job status to 'reviewed'
-      await updateActiveJob(jobData.id, { status: "reviewed", endDate: new Date().toISOString().split("T")[0] })
-
-      // Update shop's average rating (simplified, in real app would be more complex)
-      // For now, just mark job as completed for apprentice
-      const updatedApprentice = await updateUser(currentUser.id, {
-        jobsCompleted: (currentUser.jobsCompleted || 0) + 1,
-      })
-      setCurrentUserState(updatedApprentice) // Update local state and localStorage
-
-      toast({
-        title: "Job Reviewed & Completed",
-        description: "Your review has been submitted and the job marked complete.",
-      })
-
-      router.push("/dashboard/apprentice?tab=active") // Redirect back to apprentice dashboard
-    } catch (error) {
-      console.error("Failed to submit review or complete job:", error)
-      toast({
-        title: "Error",
-        description: "Failed to complete job. Please try again.",
-        variant: "destructive",
-      })
+      router.push(currentUser?.type === "shop" ? "/dashboard/shop" : "/dashboard/apprentice")
     } finally {
-      setIsSubmitting(false)
+      setIsLoading(false)
     }
   }
 
-  const renderStarRating = () => {
+  const handleReviewChange = (field: string, value: any) => {
+    setReviewForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!currentUser || !job) return
+
+    try {
+      const revieweeId = currentUser.type === "shop" ? job.apprenticeId : job.shopId
+      const reviewerType = currentUser.type
+
+      const reviewData: Omit<Review, "id" | "date"> = {
+        jobId: job.id,
+        reviewerId: currentUser.id,
+        revieweeId: revieweeId,
+        reviewerType: reviewerType,
+        rating: reviewForm.rating,
+        comment: reviewForm.comment,
+        jobTitle: job.title,
+      }
+
+      await createReview(reviewData)
+      await updateActiveJob(job.id, { status: "reviewed" })
+
+      toast({
+        title: "Review submitted!",
+        description: "Thank you for your feedback.",
+      })
+      router.push(currentUser.type === "shop" ? "/dashboard/shop" : "/dashboard/apprentice")
+    } catch (error: any) {
+      toast({
+        title: "Error submitting review",
+        description: error.message || "Failed to submit review.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  if (isLoading) {
     return (
-      <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <button key={star} type="button" onClick={() => setRating(star)} className="focus:outline-none">
-            <Star
-              className={`h-8 w-8 transition-colors ${
-                star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300 hover:text-yellow-300"
-              }`}
-            />
-          </button>
-        ))}
-        <span className="ml-3 text-lg font-medium">{rating > 0 ? `${rating}/5` : "Click to rate"}</span>
+      <div className="flex justify-center items-center min-h-screen">
+        <p>Loading review page...</p>
       </div>
     )
   }
 
-  const setCurrentUser = (user: User) => {
-    localStorage.setItem("user", JSON.stringify(user))
-    setCurrentUserState(user)
+  if (!job || !currentUser) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <p>Job not found or not ready for review.</p>
+      </div>
+    )
   }
 
-  if (!currentUser || !jobData || !shopUser) {
-    return <div>Loading...</div>
-  }
+  const isShopReviewingApprentice = currentUser.type === "shop"
+  const revieweeName = isShopReviewingApprentice ? job.apprenticeName : job.shopName
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
-            <div className="flex items-center gap-4">
-              <Link href="/" className="flex items-center gap-2">
-                <Zap className="h-6 w-6 text-yellow-500" />
-                <span className="text-xl font-bold">Crew Solutions</span>
-              </Link>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white">Review Job Experience</h1>
-                <p className="text-sm text-gray-500">{jobData.title}</p>
-              </div>
-            </div>
-            <Button variant="outline" onClick={() => router.back()}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-          </div>
-        </div>
+    <div className="flex flex-col min-h-screen">
+      <header className="px-4 lg:px-6 h-14 flex items-center border-b">
+        <Link href="/" className="flex items-center justify-center gap-2">
+          <Zap className="h-6 w-6 text-yellow-500" />
+          <span className="text-lg font-bold">Crew Solutions</span>
+        </Link>
+        <nav className="ml-auto flex gap-4 sm:gap-6">
+          <Button variant="ghost" onClick={() => router.back()}>
+            Back to Job
+          </Button>
+        </nav>
       </header>
-
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Job Summary</CardTitle>
-            <CardDescription>Review your completed work experience</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm font-medium">Shop</p>
-                <p className="text-sm text-muted-foreground">{shopUser.businessName}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Duration</p>
-                <p className="text-sm text-muted-foreground">
-                  {new Date(jobData.startDate).toLocaleDateString()} - {new Date().toLocaleDateString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Total Hours</p>
-                <p className="text-sm text-muted-foreground">{jobData.totalHours}h</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Total Pay</p>
-                <p className="text-sm text-green-600">
-                  ${(Number.parseFloat(jobData.payRate.replace(/[^0-9.]/g, "")) * jobData.totalHours).toFixed(2)}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <main className="flex-1 p-4 md:p-6">
+        <div className="max-w-2xl mx-auto grid gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Rate Your Experience</CardTitle>
-              <CardDescription>
-                How would you rate your overall experience working with {shopUser.businessName}?
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col items-center space-y-4">
-                {renderStarRating()}
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">
-                    {rating === 1 && "Poor experience"}
-                    {rating === 2 && "Below average experience"}
-                    {rating === 3 && "Average experience"}
-                    {rating === 4 && "Good experience"}
-                    {rating === 5 && "Excellent experience"}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Share Your Experience</CardTitle>
-              <CardDescription>Tell other apprentices about your experience working with this shop</CardDescription>
+              <CardTitle>Review for {job.title}</CardTitle>
+              <p className="text-sm text-gray-500">
+                You are reviewing: {revieweeName} ({isShopReviewingApprentice ? "Apprentice" : "Shop"})
+              </p>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                <Label htmlFor="comment">Your Review</Label>
-                <Textarea
-                  id="comment"
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="Describe your experience working with this shop. What did you learn? How was the work environment? Would you recommend this shop to other apprentices?"
-                  rows={6}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Your review will help other apprentices make informed decisions about job opportunities.
-                </p>
-              </div>
+              <form onSubmit={handleSubmitReview} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="rating">Rating (1-5 Stars)</Label>
+                  <Input
+                    id="rating"
+                    type="number"
+                    value={reviewForm.rating}
+                    onChange={(e) => handleReviewChange("rating", Number.parseInt(e.target.value))}
+                    min="1"
+                    max="5"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="comment">Comment</Label>
+                  <Textarea
+                    id="comment"
+                    value={reviewForm.comment}
+                    onChange={(e) => handleReviewChange("comment", e.target.value)}
+                    placeholder={`Share your feedback on ${revieweeName}'s performance...`}
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full">
+                  Submit Review
+                </Button>
+              </form>
             </CardContent>
           </Card>
-
-          <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-            <h3 className="font-medium text-green-800 dark:text-green-200 mb-2">
-              🎉 Congratulations on completing your job!
-            </h3>
-            <p className="text-sm text-green-700 dark:text-green-300">
-              Your payment of $
-              {(Number.parseFloat(jobData.payRate.replace(/[^0-9.]/g, "")) * jobData.totalHours).toFixed(2)} will be
-              processed and deposited to your account within 1-2 business days.
-            </p>
-          </div>
-
-          <div className="flex gap-4">
-            <Button type="submit" disabled={isSubmitting || rating === 0} className="flex-1">
-              {isSubmitting ? "Submitting Review..." : "Submit Review & Complete Job"}
-            </Button>
-            <Button type="button" variant="outline" onClick={() => router.back()}>
-              Cancel
-            </Button>
-          </div>
-        </form>
+        </div>
       </main>
     </div>
   )

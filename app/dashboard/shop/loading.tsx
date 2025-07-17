@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Loader2 } from "lucide-react"
 
 export default function ShopDashboardLoading() {
   return (
@@ -56,6 +57,14 @@ export default function ShopDashboardLoading() {
               </div>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Loader component added */}
+        <div className="fixed top-0 left-0 right-0 bottom-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 z-50">
+          <div className="flex flex-col items-center space-y-4">
+            <Loader2 className="h-12 w-12 animate-spin text-yellow-500" />
+            <p className="text-gray-600 dark:text-gray-400">Loading dashboard...</p>
+          </div>
         </div>
       </main>
     </div>

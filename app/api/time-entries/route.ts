@@ -1,22 +1,51 @@
 import { NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 
+type TimeEntryRow = {
+  id: string
+  job_id: string
+  apprentice_id: string
+  date: Date
+  hours: number
+  approved: boolean
+  submitted_at: Date
+  approved_at?: Date
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const jobId = searchParams.get("jobId")
     const apprenticeId = searchParams.get("apprenticeId")
 
-    let timeEntries
+    const where: string[] = []
+    const params: any[] = []
+
     if (jobId) {
-      timeEntries = await sql`SELECT * FROM time_entries WHERE job_id = ${jobId} ORDER BY date DESC`
-    } else if (apprenticeId) {
-      timeEntries = await sql`SELECT * FROM time_entries WHERE apprentice_id = ${apprenticeId} ORDER BY date DESC`
-    } else {
-      timeEntries = await sql`SELECT * FROM time_entries ORDER BY date DESC`
+      params.push(jobId)
+      where.push(`job_id = $${params.length}`)
+    }
+    if (apprenticeId) {
+      params.push(apprenticeId)
+      where.push(`apprentice_id = $${params.length}`)
     }
 
-    return NextResponse.json(timeEntries, { status: 200 })
+    const query = "SELECT * FROM time_entries" + (where.length ? ` WHERE ${where.join(" AND ")}` : "")
+
+    const entries: TimeEntryRow[] = await sql(query, params)
+
+    const result = entries.map((e) => ({
+      id: e.id,
+      jobId: e.job_id,
+      apprenticeId: e.apprentice_id,
+      date: e.date.toISOString().split("T")[0],
+      hours: e.hours,
+      approved: e.approved,
+      submittedAt: e.submitted_at.toISOString(),
+      approvedAt: e.approved_at?.toISOString(),
+    }))
+
+    return NextResponse.json(result, { status: 200 })
   } catch (error) {
     console.error("Error fetching time entries:", error)
     return NextResponse.json({ message: "Internal server error" }, { status: 500 })
@@ -25,25 +54,36 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
+    const entryData = await request.json()
+
+    const dbData: Record<string, any> = {
+      id: `time-entry-${Date.now()}`,
+      job_id: entryData.jobId,
+      apprentice_id: entryData.apprenticeId,
+      date: entryData.date,
+      hours: entryData.hours,
+      approved: entryData.approved || false,
+      submitted_at: new Date().toISOString(),
+      approved_at: entryData.approvedAt,
+    }
+
     const [newEntry] = await sql`
-      INSERT INTO time_entries ${sql(
-        {
-          ...body,
-          submitted_at: new Date().toISOString(),
-        },
-        "job_id",
-        "apprentice_id",
-        "date",
-        "hours",
-        "approved",
-        "submitted_at",
-        "approved_at",
-      )}
+      INSERT INTO time_entries ${sql(dbData, Object.keys(dbData))}
       RETURNING *
     `
 
-    return NextResponse.json(newEntry, { status: 201 })
+    const result = {
+      id: newEntry.id,
+      jobId: newEntry.job_id,
+      apprenticeId: newEntry.apprentice_id,
+      date: newEntry.date.toISOString().split("T")[0],
+      hours: newEntry.hours,
+      approved: newEntry.approved,
+      submittedAt: newEntry.submitted_at.toISOString(),
+      approvedAt: newEntry.approved_at?.toISOString(),
+    }
+
+    return NextResponse.json(result, { status: 201 })
   } catch (error) {
     console.error("Error creating time entry:", error)
     return NextResponse.json({ message: "Internal server error" }, { status: 500 })
@@ -52,7 +92,8 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const { id, approved } = await request.json()
+    const updateData = await request.json()
+    const { id, approved } = updateData
 
     if (!id || typeof approved !== "boolean") {
       return NextResponse.json({ message: "ID and approved status are required" }, { status: 400 })
@@ -60,7 +101,7 @@ export async function PUT(request: Request) {
 
     const [updatedEntry] = await sql`
       UPDATE time_entries
-      SET approved = ${approved}, approved_at = ${new Date().toISOString()}
+      SET approved = ${approved}, approved_at = ${approved ? new Date().toISOString() : null}
       WHERE id = ${id}
       RETURNING *
     `
@@ -69,7 +110,18 @@ export async function PUT(request: Request) {
       return NextResponse.json({ message: "Time entry not found" }, { status: 404 })
     }
 
-    return NextResponse.json(updatedEntry, { status: 200 })
+    const result = {
+      id: updatedEntry.id,
+      jobId: updatedEntry.job_id,
+      apprenticeId: updatedEntry.apprentice_id,
+      date: updatedEntry.date.toISOString().split("T")[0],
+      hours: updatedEntry.hours,
+      approved: updatedEntry.approved,
+      submittedAt: updatedEntry.submitted_at.toISOString(),
+      approvedAt: updatedEntry.approved_at?.toISOString(),
+    }
+
+    return NextResponse.json(result, { status: 200 })
   } catch (error) {
     console.error("Error updating time entry:", error)
     return NextResponse.json({ message: "Internal server error" }, { status: 500 })

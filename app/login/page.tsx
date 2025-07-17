@@ -31,7 +31,7 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const user = authenticateUser(email, password)
+      const user = await authenticateUser(email, password)
 
       if (user) {
         setCurrentUser(user)
@@ -47,16 +47,18 @@ export default function LoginPage() {
           router.push("/dashboard/apprentice")
         }
       } else {
+        // This else block might not be reached if authenticateUser throws an error for invalid credentials
         toast({
           title: "Login failed",
           description: "Invalid email or password",
           variant: "destructive",
         })
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Login error:", error)
       toast({
         title: "Login error",
-        description: "An error occurred during login",
+        description: error.message || "An error occurred during login",
         variant: "destructive",
       })
     } finally {

@@ -1,395 +1,250 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect, useCallback } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Badge } from "@/components/ui/badge"
-import { Star, ArrowLeft, Zap } from "lucide-react"
-import Link from "next/link"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/hooks/use-toast"
 import {
   getCurrentUser,
   getActiveJobById,
-  createReview,
   updateActiveJob,
-  updateUser,
-  fetchReviews, // Declare fetchReviews here
+  createTimeEntry,
+  getTimeEntries,
   type User,
   type ActiveJob,
+  type TimeEntry,
 } from "@/lib/storage"
+import { format } from "date-fns"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Zap } from "lucide-react"
+import Link from "next/link"
 
-const skillOptions = [
-  "Basic Electrical Theory",
-  "Wiring Installation",
-  "Circuit Analysis",
-  "Motor Controls",
-  "Panel Installation",
-  "Conduit Bending",
-  "Blueprint Reading",
-  "Safety Protocols",
-  "Hand Tools",
-  "Power Tools",
-]
-
-export default function JobCompletePage() {
+export default function JobCompletePage({ params }: { params: { id: string } }) {
+  const { id: jobId } = params
   const router = useRouter()
-  const params = useParams()
-  const jobId = params.id as string
-  const [currentUser, setCurrentUserState] = useState<User | null>(null)
-  const [jobData, setJobData] = useState<ActiveJob | null>(null)
-  const [apprenticeUser, setApprenticeUser] = useState<User | null>(null) // To get apprentice's full name
-  const [ratings, setRatings] = useState({
-    timeliness: 0,
-    workEthic: 0,
-    materialKnowledge: 0,
-    profileAccuracy: 0,
-  })
-  const [skillsShown, setSkillsShown] = useState<string[]>([])
-  const [comment, setComment] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const { toast } = useToast()
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [job, setJob] = useState<ActiveJob | null>(null)
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
+  const [hoursToday, setHoursToday] = useState<number>(0)
+  const [isSubmittingHours, setIsSubmittingHours] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const loadJobAndUser = useCallback(async () => {
+  useEffect(() => {
     const user = getCurrentUser()
     if (!user) {
       router.push("/login")
       return
     }
-    setCurrentUserState(user)
+    setCurrentUser(user)
+    fetchJobData(user.id, jobId)
+  }, [router, jobId])
 
-    if (!jobId) {
-      toast({
-        title: "Error",
-        description: "Job ID is missing.",
-        variant: "destructive",
-      })
-      router.push("/dashboard/shop")
-      return
-    }
-
+  const fetchJobData = async (userId: string, currentJobId: string) => {
+    setIsLoading(true)
     try {
-      const activeJob = await getActiveJobById(jobId)
-      if (!activeJob || activeJob.shopId !== user.id) {
+      const fetchedJob = await getActiveJobById(currentJobId)
+      if (fetchedJob.apprenticeId !== userId && fetchedJob.shopId !== userId) {
         toast({
-          title: "Unauthorized",
-          description: "You are not authorized to complete this job.",
+          title: "Access Denied",
+          description: "You do not have permission to view this job.",
           variant: "destructive",
         })
-        router.push("/dashboard/shop")
+        router.push(currentUser?.type === "shop" ? "/dashboard/shop" : "/dashboard/apprentice")
         return
       }
-      setJobData(activeJob)
+      setJob(fetchedJob)
 
-      // Fetch apprentice details
-      const apprentice = await updateUser(activeJob.apprenticeId, {}) // Fetch full apprentice data
-      setApprenticeUser(apprentice)
-
-      // Initialize skillsShown with apprentice's listed skills
-      if (apprentice?.skills) {
-        setSkillsShown(apprentice.skills)
-      }
-    } catch (error) {
-      console.error("Failed to load job data:", error)
+      const entries = await getTimeEntries(currentJobId)
+      setTimeEntries(entries)
+    } catch (error: any) {
       toast({
-        title: "Error",
-        description: "Failed to load job details. Please try again.",
+        title: "Error loading job",
+        description: error.message || "Failed to fetch job details.",
         variant: "destructive",
       })
-      router.push("/dashboard/shop")
+      router.push(currentUser?.type === "shop" ? "/dashboard/shop" : "/dashboard/apprentice")
+    } finally {
+      setIsLoading(false)
     }
-  }, [router, jobId, toast])
-
-  useEffect(() => {
-    loadJobAndUser()
-  }, [loadJobAndUser])
-
-  const handleRatingChange = (category: string, rating: number) => {
-    setRatings((prev) => ({ ...prev, [category]: rating }))
   }
 
-  const handleSkillToggle = (skill: string) => {
-    setSkillsShown((prev) => (prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]))
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-
-    if (!currentUser || !jobData || !apprenticeUser) {
+  const handleHoursSubmit = async () => {
+    if (!currentUser || !job || hoursToday <= 0) {
       toast({
-        title: "Error",
-        description: "Missing user or job data.",
+        title: "Invalid input",
+        description: "Please enter valid hours.",
         variant: "destructive",
       })
-      setIsSubmitting(false)
       return
     }
 
-    // Validate all ratings are provided
-    const allRatingsProvided = Object.values(ratings).every((rating) => rating > 0)
-    if (!allRatingsProvided) {
-      toast({
-        title: "Missing Ratings",
-        description: "Please provide ratings for all categories.",
-        variant: "destructive",
-      })
-      setIsSubmitting(false)
-      return
-    }
-
+    setIsSubmittingHours(true)
     try {
-      // Create review
-      await createReview({
-        jobId: jobData.id,
-        reviewerId: currentUser.id,
-        revieweeId: jobData.apprenticeId,
-        reviewerType: "shop",
-        rating: Math.round(Object.values(ratings).reduce((sum, r) => sum + r, 0) / Object.values(ratings).length), // Overall average rating
-        comment: comment,
-        ratings: ratings,
-        skillsShown: skillsShown,
-        jobTitle: jobData.title,
+      const newEntry: Omit<TimeEntry, "id" | "submittedAt" | "approvedAt"> = {
+        jobId: job.id,
+        apprenticeId: currentUser.id,
+        date: format(new Date(), "yyyy-MM-dd"),
+        hours: hoursToday,
+        approved: false,
+      }
+      await createTimeEntry(newEntry)
+
+      // Update job's pending hours
+      const updatedPendingHours = (job.pendingHours || 0) + hoursToday
+      const updatedTotalHours = (job.totalHours || 0) + hoursToday
+      await updateActiveJob(job.id, {
+        pendingHours: updatedPendingHours,
+        totalHours: updatedTotalHours,
       })
 
-      // Update active job status to 'reviewed'
-      await updateActiveJob(jobData.id, { status: "reviewed", endDate: new Date().toISOString().split("T")[0] })
-
-      // Update apprentice's total jobs completed and average rating
-      const apprenticeReviews = await fetchReviews(apprenticeUser.id, true)
-      const newJobsCompleted = (apprenticeUser.jobsCompleted || 0) + 1
-      const newAverageRating =
-        apprenticeReviews.length > 0
-          ? (apprenticeReviews.reduce((sum, r) => sum + r.rating, 0) + ratings.profileAccuracy) /
-            (apprenticeReviews.length + 1)
-          : ratings.profileAccuracy
-
-      await updateUser(apprenticeUser.id, {
-        jobsCompleted: newJobsCompleted,
-        rating: newAverageRating,
-        hoursCompleted: (
-          Number.parseInt(apprenticeUser.hoursCompleted?.toString() || "0") + jobData.totalHours
-        ).toString(),
-      })
-
+      toast({ title: "Hours submitted successfully!" })
+      setHoursToday(0)
+      fetchJobData(currentUser.id, jobId) // Re-fetch to update UI
+    } catch (error: any) {
       toast({
-        title: "Job Completed & Reviewed",
-        description: "The job has been marked complete and your review submitted.",
-      })
-
-      router.push("/dashboard/shop?tab=active") // Redirect back to shop dashboard
-    } catch (error) {
-      console.error("Failed to submit review or complete job:", error)
-      toast({
-        title: "Error",
-        description: "Failed to complete job. Please try again.",
+        title: "Error submitting hours",
+        description: error.message || "Failed to submit hours.",
         variant: "destructive",
       })
     } finally {
-      setIsSubmitting(false)
+      setIsSubmittingHours(false)
     }
   }
 
-  const renderStarRating = (category: string, currentRating: number) => {
+  const handleMarkComplete = async () => {
+    if (!currentUser || !job) return
+
+    try {
+      await updateActiveJob(job.id, { status: "completed", endDate: new Date().toISOString().split("T")[0] })
+      toast({ title: "Job marked as complete!", description: "You can now review the shop/apprentice." })
+      router.push(`/job/${job.id}/review`)
+    } catch (error: any) {
+      toast({
+        title: "Error marking job complete",
+        description: error.message || "Failed to mark job as complete.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  if (isLoading) {
     return (
-      <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <button
-            key={star}
-            type="button"
-            onClick={() => handleRatingChange(category, star)}
-            className="focus:outline-none"
-          >
-            <Star
-              className={`h-6 w-6 transition-colors ${
-                star <= currentRating ? "fill-yellow-400 text-yellow-400" : "text-gray-300 hover:text-yellow-300"
-              }`}
-            />
-          </button>
-        ))}
-        <span className="ml-2 text-sm text-muted-foreground">
-          {currentRating > 0 ? `${currentRating}/5` : "Not rated"}
-        </span>
+      <div className="flex justify-center items-center min-h-screen">
+        <p>Loading job details...</p>
       </div>
     )
   }
 
-  if (!currentUser || !jobData || !apprenticeUser) {
-    return <div>Loading...</div>
+  if (!job || !currentUser) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <p>Job not found or access denied.</p>
+      </div>
+    )
   }
 
+  const isApprentice = currentUser.type === "apprentice"
+  const progress = (job.daysWorked / job.totalDays) * 100 || 0
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
-            <div className="flex items-center gap-4">
-              <Link href="/" className="flex items-center gap-2">
-                <Zap className="h-6 w-6 text-yellow-500" />
-                <span className="text-xl font-bold">Crew Solutions</span>
-              </Link>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white">Complete Job</h1>
-                <p className="text-sm text-gray-500">{jobData.title}</p>
-              </div>
-            </div>
-            <Button variant="outline" onClick={() => router.back()}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-          </div>
-        </div>
+    <div className="flex flex-col min-h-screen">
+      <header className="px-4 lg:px-6 h-14 flex items-center border-b">
+        <Link href="/" className="flex items-center justify-center gap-2">
+          <Zap className="h-6 w-6 text-yellow-500" />
+          <span className="text-lg font-bold">Crew Solutions</span>
+        </Link>
+        <nav className="ml-auto flex gap-4 sm:gap-6">
+          <Button variant="ghost" onClick={() => router.back()}>
+            Back to Dashboard
+          </Button>
+        </nav>
       </header>
-
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Job Summary</CardTitle>
-            <CardDescription>Review the completed work details</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm font-medium">Apprentice</p>
-                <p className="text-sm text-muted-foreground">
-                  {apprenticeUser.firstName} {apprenticeUser.lastName?.charAt(0)}.
-                </p>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Duration</p>
-                <p className="text-sm text-muted-foreground">
-                  {new Date(jobData.startDate).toLocaleDateString()} - {new Date().toLocaleDateString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Total Hours</p>
-                <p className="text-sm text-muted-foreground">{jobData.totalHours}h</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Total Pay</p>
-                <p className="text-sm text-green-600">
-                  ${(Number.parseFloat(jobData.payRate.replace(/[^0-9.]/g, "")) * jobData.totalHours).toFixed(2)}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <main className="flex-1 p-4 md:p-6">
+        <div className="max-w-4xl mx-auto grid gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Rate Apprentice Performance</CardTitle>
-              <CardDescription>Provide ratings for different aspects of their work</CardDescription>
+              <CardTitle>{job.title}</CardTitle>
+              <p className="text-sm text-gray-500">
+                {isApprentice ? `Shop: ${job.shopName}` : `Apprentice: ${job.apprenticeName}`}
+              </p>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-base font-medium">Timeliness</Label>
-                  <p className="text-sm text-muted-foreground mb-2">How punctual and reliable was the apprentice?</p>
-                  {renderStarRating("timeliness", ratings.timeliness)}
-                </div>
-
-                <div>
-                  <Label className="text-base font-medium">Work Ethic</Label>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    How was their attitude, effort, and professionalism?
-                  </p>
-                  {renderStarRating("workEthic", ratings.workEthic)}
-                </div>
-
-                <div>
-                  <Label className="text-base font-medium">Material Knowledge</Label>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    How well did they understand electrical concepts and materials?
-                  </p>
-                  {renderStarRating("materialKnowledge", ratings.materialKnowledge)}
-                </div>
-
-                <div>
-                  <Label className="text-base font-medium">Profile Accuracy</Label>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    How accurately did their profile represent their actual skill level?
-                  </p>
-                  {renderStarRating("profileAccuracy", ratings.profileAccuracy)}
-                </div>
+            <CardContent className="space-y-4">
+              <div>
+                <h3 className="font-semibold">Job Progress</h3>
+                <Progress value={progress} className="w-full mt-2" />
+                <p className="text-sm text-gray-500 mt-1">
+                  {job.daysWorked} of {job.totalDays} days completed ({progress.toFixed(0)}%)
+                </p>
+                <p className="text-sm text-gray-500">Total Hours Logged: {job.totalHours}</p>
+                <p className="text-sm text-gray-500">Pending Hours: {job.pendingHours}</p>
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Skills Demonstrated</CardTitle>
-              <CardDescription>
-                Check the skills that {apprenticeUser.firstName} demonstrated on the job site
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div>
-                  <Label className="text-sm font-medium">Apprentice's Listed Skills:</Label>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {apprenticeUser.skills?.map((skill: string) => (
-                      <Badge key={skill} variant="secondary" className="text-xs">
-                        {skill}
-                      </Badge>
-                    ))}
+              {isApprentice && job.canSubmitHours && (
+                <div className="space-y-2">
+                  <Label htmlFor="hoursToday">Log Hours for Today</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="hoursToday"
+                      type="number"
+                      value={hoursToday}
+                      onChange={(e) => setHoursToday(Number.parseFloat(e.target.value))}
+                      min="0"
+                      max="12"
+                      step="0.5"
+                      placeholder="e.g., 8"
+                    />
+                    <Button onClick={handleHoursSubmit} disabled={isSubmittingHours || hoursToday <= 0}>
+                      {isSubmittingHours ? "Submitting..." : "Submit Hours"}
+                    </Button>
                   </div>
                 </div>
+              )}
 
-                <div>
-                  <Label className="text-sm font-medium">Skills Shown on Job Site:</Label>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {skillOptions.map((skill) => (
-                      <div key={skill} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={skill}
-                          checked={skillsShown.includes(skill)}
-                          onCheckedChange={() => handleSkillToggle(skill)}
-                        />
-                        <Label htmlFor={skill} className="text-sm font-normal">
-                          {skill}
-                        </Label>
+              <div>
+                <h3 className="font-semibold mb-2">Time Entries</h3>
+                {timeEntries.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No time entries yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {timeEntries.map((entry) => (
+                      <div key={entry.id} className="flex justify-between items-center border-b pb-1 text-sm">
+                        <span>
+                          {format(new Date(entry.date), "MMM dd, yyyy")} - {entry.hours} hours
+                        </span>
+                        <span className={`font-medium ${entry.approved ? "text-green-600" : "text-yellow-600"}`}>
+                          {entry.approved ? "Approved" : "Pending"}
+                        </span>
                       </div>
                     ))}
                   </div>
-                </div>
+                )}
               </div>
+
+              {job.status === "in-progress" && (
+                <Button onClick={handleMarkComplete} className="w-full mt-4">
+                  Mark Job as Complete
+                </Button>
+              )}
+
+              {job.status === "completed" && (
+                <div className="mt-4 text-center text-lg font-semibold text-green-600">
+                  Job is completed! Please proceed to review.
+                  <Button onClick={() => router.push(`/job/${job.id}/review`)} className="w-full mt-2">
+                    Go to Review
+                  </Button>
+                </div>
+              )}
+
+              {job.status === "reviewed" && (
+                <div className="mt-4 text-center text-lg font-semibold text-blue-600">Job has been reviewed.</div>
+              )}
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Additional Comments</CardTitle>
-              <CardDescription>Share any additional feedback about the apprentice's performance</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Describe the apprentice's performance, areas of strength, and any suggestions for improvement..."
-                rows={4}
-              />
-            </CardContent>
-          </Card>
-
-          <div className="flex gap-4">
-            <Button
-              type="submit"
-              disabled={isSubmitting || Object.values(ratings).some((rating) => rating === 0)}
-              className="flex-1"
-            >
-              {isSubmitting ? "Submitting Review..." : "Complete Job & Submit Review"}
-            </Button>
-            <Button type="button" variant="outline" onClick={() => router.back()}>
-              Cancel
-            </Button>
-          </div>
-        </form>
+        </div>
       </main>
     </div>
   )

@@ -4,16 +4,37 @@ import { sql } from "@/lib/db"
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     const { id } = params
-    const activeJobs = await sql`SELECT * FROM active_jobs WHERE id = ${id}`
-    const activeJob = activeJobs[0]
+    const jobs = await sql`SELECT * FROM active_jobs WHERE id = ${id}`
+    const job = jobs[0]
 
-    if (!activeJob) {
+    if (!job) {
       return NextResponse.json({ message: "Active job not found" }, { status: 404 })
     }
 
-    return NextResponse.json(activeJob, { status: 200 })
+    const result = {
+      id: job.id,
+      jobPostingId: job.job_posting_id,
+      shopId: job.shop_id,
+      apprenticeId: job.apprentice_id,
+      title: job.title,
+      shopName: job.shop_name,
+      apprenticeName: job.apprentice_name,
+      startDate: job.start_date.toISOString().split("T")[0],
+      endDate: job.end_date?.toISOString().split("T")[0],
+      daysWorked: job.days_worked,
+      totalDays: job.total_days,
+      hoursPerDay: job.hours_per_day,
+      payRate: job.pay_rate,
+      status: job.status,
+      totalHours: job.total_hours,
+      pendingHours: job.pending_hours,
+      canComplete: job.can_complete,
+      canSubmitHours: job.can_submit_hours,
+    }
+
+    return NextResponse.json(result, { status: 200 })
   } catch (error) {
-    console.error("Error fetching active job:", error)
+    console.error("Error fetching active job by ID:", error)
     return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
 }
@@ -21,40 +42,19 @@ export async function GET(request: Request, { params }: { params: { id: string }
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
     const { id } = params
-    const body = await request.json()
-    const updateData: Record<string, any> = {}
+    const updateData = await request.json()
 
-    // Map camelCase to snake_case for DB columns
-    for (const key in body) {
-      const snakeCaseKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-      updateData[snakeCaseKey] = body[key]
+    const dbUpdateData: Record<string, any> = {}
+    for (const key in updateData) {
+      if (Object.prototype.hasOwnProperty.call(updateData, key)) {
+        const dbKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+        dbUpdateData[dbKey] = updateData[key]
+      }
     }
 
-    // Ensure date fields are handled correctly
-    if (updateData.start_date) updateData.start_date = new Date(updateData.start_date)
-    if (updateData.end_date) updateData.end_date = new Date(updateData.end_date)
-
     const [updatedJob] = await sql`
-      UPDATE active_jobs SET ${sql(
-        updateData,
-        "job_posting_id",
-        "shop_id",
-        "apprentice_id",
-        "title",
-        "shop_name",
-        "apprentice_name",
-        "start_date",
-        "end_date",
-        "days_worked",
-        "total_days",
-        "hours_per_day",
-        "pay_rate",
-        "status",
-        "total_hours",
-        "pending_hours",
-        "can_complete",
-        "can_submit_hours",
-      )}
+      UPDATE active_jobs
+      SET ${sql(dbUpdateData, Object.keys(dbUpdateData))}
       WHERE id = ${id}
       RETURNING *
     `
@@ -63,7 +63,28 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ message: "Active job not found" }, { status: 404 })
     }
 
-    return NextResponse.json(updatedJob, { status: 200 })
+    const result = {
+      id: updatedJob.id,
+      jobPostingId: updatedJob.job_posting_id,
+      shopId: updatedJob.shop_id,
+      apprenticeId: updatedJob.apprentice_id,
+      title: updatedJob.title,
+      shopName: updatedJob.shop_name,
+      apprenticeName: updatedJob.apprentice_name,
+      startDate: updatedJob.start_date.toISOString().split("T")[0],
+      endDate: updatedJob.end_date?.toISOString().split("T")[0],
+      daysWorked: updatedJob.days_worked,
+      totalDays: updatedJob.total_days,
+      hoursPerDay: updatedJob.hours_per_day,
+      payRate: updatedJob.pay_rate,
+      status: updatedJob.status,
+      totalHours: updatedJob.total_hours,
+      pendingHours: updatedJob.pending_hours,
+      canComplete: updatedJob.can_complete,
+      canSubmitHours: updatedJob.can_submit_hours,
+    }
+
+    return NextResponse.json(result, { status: 200 })
   } catch (error) {
     console.error("Error updating active job:", error)
     return NextResponse.json({ message: "Internal server error" }, { status: 500 })

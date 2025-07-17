@@ -1,20 +1,17 @@
--- Enable uuid-ossp extension for UUID generation
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Table for Users (both shops and apprentices)
+-- Create the users table
 CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    type VARCHAR(20) NOT NULL, -- 'shop' or 'apprentice'
+    id VARCHAR(255) PRIMARY KEY,
+    type VARCHAR(50) NOT NULL, -- 'shop' or 'apprentice'
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     first_name VARCHAR(255),
     last_name VARCHAR(255),
     business_name VARCHAR(255),
     owner_name VARCHAR(255),
-    phone VARCHAR(50),
+    phone VARCHAR(50) NOT NULL,
     address VARCHAR(255),
-    city VARCHAR(255) NOT NULL,
-    state VARCHAR(255) NOT NULL,
+    city VARCHAR(255),
+    state VARCHAR(255),
     zip_code VARCHAR(20),
     business_type VARCHAR(255),
     license_number VARCHAR(255),
@@ -39,35 +36,35 @@ CREATE TABLE IF NOT EXISTS users (
     profile_complete BOOLEAN DEFAULT FALSE
 );
 
--- Table for Job Postings by Shops
+-- Create the job_postings table
 CREATE TABLE IF NOT EXISTS job_postings (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    shop_id UUID NOT NULL REFERENCES users(id),
+    id VARCHAR(255) PRIMARY KEY,
+    shop_id VARCHAR(255) NOT NULL REFERENCES users(id),
     title VARCHAR(255) NOT NULL,
     description TEXT NOT NULL,
     apprentices_needed INTEGER NOT NULL,
     expected_duration VARCHAR(255),
-    days_needed INTEGER NOT NULL,
+    days_needed INTEGER,
     start_date DATE NOT NULL,
-    hours_per_day INTEGER NOT NULL,
-    work_days TEXT[], -- Array of strings (e.g., ['Monday', 'Tuesday'])
-    pay_rate VARCHAR(50) NOT NULL,
+    hours_per_day INTEGER,
+    work_days TEXT[], -- Array of strings (e.g., ['Monday', 'Wednesday'])
+    pay_rate VARCHAR(255) NOT NULL,
     requirements TEXT[], -- Array of strings
     required_skills TEXT[], -- Array of strings
-    priority VARCHAR(20) NOT NULL, -- 'high', 'medium', 'low'
-    status VARCHAR(20) NOT NULL, -- 'active', 'filled', 'paused'
+    priority VARCHAR(50) NOT NULL, -- 'high', 'medium', 'low'
+    status VARCHAR(50) NOT NULL, -- 'active', 'filled', 'paused'
     applicants INTEGER DEFAULT 0,
-    posted_date DATE DEFAULT CURRENT_DATE,
+    posted_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     total_cost NUMERIC(10,2),
     weekly_payment NUMERIC(10,2)
 );
 
--- Table for Active Jobs (when an apprentice accepts a job)
+-- Create the active_jobs table
 CREATE TABLE IF NOT EXISTS active_jobs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    job_posting_id UUID NOT NULL REFERENCES job_postings(id),
-    shop_id UUID NOT NULL REFERENCES users(id),
-    apprentice_id UUID NOT NULL REFERENCES users(id),
+    id VARCHAR(255) PRIMARY KEY,
+    job_posting_id VARCHAR(255) REFERENCES job_postings(id),
+    shop_id VARCHAR(255) NOT NULL REFERENCES users(id),
+    apprentice_id VARCHAR(255) NOT NULL REFERENCES users(id),
     title VARCHAR(255) NOT NULL,
     shop_name VARCHAR(255) NOT NULL,
     apprentice_name VARCHAR(255) NOT NULL,
@@ -76,61 +73,19 @@ CREATE TABLE IF NOT EXISTS active_jobs (
     days_worked INTEGER DEFAULT 0,
     total_days INTEGER NOT NULL,
     hours_per_day INTEGER NOT NULL,
-    pay_rate VARCHAR(50) NOT NULL,
-    status VARCHAR(20) NOT NULL, -- 'in-progress', 'completed', 'reviewed'
+    pay_rate VARCHAR(255) NOT NULL,
+    status VARCHAR(50) NOT NULL, -- 'in-progress', 'completed', 'reviewed'
     total_hours INTEGER DEFAULT 0,
     pending_hours INTEGER DEFAULT 0,
     can_complete BOOLEAN DEFAULT FALSE,
-    can_submit_hours BOOLEAN DEFAULT TRUE
+    can_submit_hours BOOLEAN DEFAULT FALSE
 );
 
--- Table for Job Invitations
-CREATE TABLE IF NOT EXISTS job_invitations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    job_posting_id UUID NOT NULL REFERENCES job_postings(id),
-    shop_id UUID NOT NULL REFERENCES users(id),
-    apprentice_id UUID NOT NULL REFERENCES users(id),
-    shop_name VARCHAR(255) NOT NULL,
-    title VARCHAR(255) NOT NULL,
-    description TEXT NOT NULL,
-    pay_rate VARCHAR(50) NOT NULL,
-    days_needed INTEGER NOT NULL,
-    start_date DATE NOT NULL,
-    hours_per_day INTEGER NOT NULL,
-    work_days TEXT[],
-    requirements TEXT[],
-    required_skills TEXT[],
-    location VARCHAR(255),
-    priority VARCHAR(20),
-    total_pay NUMERIC(10,2),
-    weekly_pay NUMERIC(10,2),
-    status VARCHAR(20) NOT NULL, -- 'pending', 'accepted', 'declined'
-    sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Table for Reviews
-CREATE TABLE IF NOT EXISTS reviews (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    job_id UUID NOT NULL, -- Can be job_posting_id or active_job_id depending on context
-    reviewer_id UUID NOT NULL REFERENCES users(id),
-    reviewee_id UUID NOT NULL REFERENCES users(id),
-    reviewer_type VARCHAR(20) NOT NULL, -- 'shop' or 'apprentice'
-    rating INTEGER NOT NULL, -- Overall rating
-    comment TEXT,
-    timeliness_rating INTEGER,
-    work_ethic_rating INTEGER,
-    material_knowledge_rating INTEGER,
-    profile_accuracy_rating INTEGER,
-    skills_shown TEXT[], -- Array of strings
-    job_title VARCHAR(255) NOT NULL,
-    date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Table for Time Entries
+-- Create the time_entries table
 CREATE TABLE IF NOT EXISTS time_entries (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    job_id UUID NOT NULL REFERENCES active_jobs(id),
-    apprentice_id UUID NOT NULL REFERENCES users(id),
+    id VARCHAR(255) PRIMARY KEY,
+    job_id VARCHAR(255) NOT NULL REFERENCES active_jobs(id),
+    apprentice_id VARCHAR(255) NOT NULL REFERENCES users(id),
     date DATE NOT NULL,
     hours NUMERIC(4,2) NOT NULL,
     approved BOOLEAN DEFAULT FALSE,
@@ -138,29 +93,65 @@ CREATE TABLE IF NOT EXISTS time_entries (
     approved_at TIMESTAMP WITH TIME ZONE
 );
 
--- Optional: Add sample data for initial testing
-INSERT INTO users (id, type, email, password, first_name, last_name, business_name, owner_name, phone, address, city, state, zip_code, license_number, hours_completed, experience_level, availability, skills, rating, jobs_completed, profile_complete) VALUES
-('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'shop', 'shop@example.com', 'password123', NULL, NULL, 'Bay Area Electric Co.', 'John Smith', '(415) 555-0123', '123 Main St', 'San Francisco', 'CA', '94102', 'C10-123456', NULL, NULL, NULL, NULL, 4.8, 25, TRUE),
-('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'apprentice', 'apprentice@example.com', 'password123', 'Marcus', 'Chen', NULL, NULL, '(415) 555-0124', '456 Oak St', 'San Francisco', 'CA', '94103', NULL, 1200, 'basic-experience', 'full-time', ARRAY['Wiring Installation', 'Safety Protocols', 'Hand Tools'], 4.6, 8, TRUE);
+-- Create the job_invitations table
+CREATE TABLE IF NOT EXISTS job_invitations (
+    id VARCHAR(255) PRIMARY KEY,
+    job_posting_id VARCHAR(255) NOT NULL REFERENCES job_postings(id),
+    shop_id VARCHAR(255) NOT NULL REFERENCES users(id),
+    apprentice_id VARCHAR(255) NOT NULL REFERENCES users(id),
+    shop_name VARCHAR(255) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    pay_rate VARCHAR(255) NOT NULL,
+    days_needed INTEGER,
+    start_date DATE NOT NULL,
+    hours_per_day INTEGER,
+    work_days TEXT[],
+    requirements TEXT[],
+    required_skills TEXT[],
+    location VARCHAR(255),
+    priority VARCHAR(50),
+    total_pay NUMERIC(10,2),
+    weekly_pay NUMERIC(10,2),
+    status VARCHAR(50) NOT NULL, -- 'pending', 'accepted', 'declined'
+    sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 
-INSERT INTO job_postings (id, shop_id, title, description, apprentices_needed, expected_duration, days_needed, start_date, hours_per_day, work_days, pay_rate, requirements, required_skills, priority, status, applicants, total_cost, weekly_payment) VALUES
-('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Residential Wiring Assistant', 'Help with residential electrical installations and repairs', 1, '2 weeks', 10, '2025-01-20', 8, ARRAY['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'], '$18-22/hour', ARRAY['Basic wiring knowledge', 'Safety protocols'], ARRAY['Wiring Installation', 'Safety Protocols'], 'medium', 'active', 0, 1600.00, 800.00);
+-- Create the reviews table
+CREATE TABLE IF NOT EXISTS reviews (
+    id VARCHAR(255) PRIMARY KEY,
+    job_id VARCHAR(255) NOT NULL REFERENCES active_jobs(id),
+    reviewer_id VARCHAR(255) NOT NULL REFERENCES users(id),
+    reviewee_id VARCHAR(255) NOT NULL REFERENCES users(id),
+    reviewer_type VARCHAR(50) NOT NULL, -- 'shop' or 'apprentice'
+    rating NUMERIC(2,1) NOT NULL,
+    comment TEXT,
+    ratings JSONB, -- Store detailed ratings as JSON
+    skills_shown TEXT[], -- Array of strings
+    job_title VARCHAR(255),
+    date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 
-INSERT INTO active_jobs (id, job_posting_id, shop_id, apprentice_id, title, shop_name, apprentice_name, start_date, days_worked, total_days, hours_per_day, pay_rate, status, total_hours, pending_hours, can_complete, can_submit_hours) VALUES
-('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Residential Wiring Assistant', 'Bay Area Electric Co.', 'Marcus Chen', '2025-01-10', 8, 10, 8, '$20/hour', 'in-progress', 64, 8, TRUE, TRUE);
+-- Seed initial data (optional, but good for testing)
+INSERT INTO users (id, type, email, password, business_name, owner_name, phone, address, city, state, zip_code, license_number, rating, jobs_completed, created_at, profile_complete)
+VALUES
+('shop-1', 'shop', 'shop@example.com', '$2a$10$yF.0.2.3.4.5.6.7.8.9.0.1.2.3.4.5.6.7.8.9.0.1.2.3.4.5.6.7.8.9.0.1', 'Bay Area Electric Co.', 'John Smith', '(415) 555-0123', '123 Main Street', 'San Francisco', 'CA', '94102', 'C10-123456', 4.8, 25, NOW(), TRUE)
+ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO job_invitations (id, job_posting_id, shop_id, apprentice_id, shop_name, title, description, pay_rate, days_needed, start_date, hours_per_day, work_days, requirements, required_skills, location, priority, total_pay, weekly_pay, status) VALUES
-('e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Express Electric', 'Emergency Repair Assistant', 'Urgent electrical repair needed for commercial building. Must be available immediately.', '$25/hour', 2, '2025-01-16', 8, ARRAY['Monday', 'Tuesday'], ARRAY['Available immediately', 'Basic electrical knowledge'], ARRAY['Safety Protocols', 'Hand Tools'], 'San Jose, CA', 'high', 400.00, NULL, 'pending');
+INSERT INTO users (id, type, email, password, first_name, last_name, phone, address, city, state, zip_code, experience_level, availability, skills, rating, jobs_completed, hours_completed, created_at, profile_complete)
+VALUES
+('apprentice-1', 'apprentice', 'apprentice@example.com', '$2a$10$yF.0.2.3.4.5.6.7.8.9.0.1.2.3.4.5.6.7.8.9.0.1.2.3.4.5.6.7.8.9.0.1', 'Marcus', 'Chen', '(415) 555-0124', '456 Oak Street', 'San Francisco', 'CA', '94103', 'basic-experience', 'full-time', ARRAY['Wiring Installation', 'Safety Protocols', 'Hand Tools'], 4.6, 8, 1200, NOW(), TRUE)
+ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO reviews (id, job_id, reviewer_id, reviewee_id, reviewer_type, rating, comment, timeliness_rating, work_ethic_rating, material_knowledge_rating, profile_accuracy_rating, skills_shown, job_title) VALUES
-('f0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'shop', 5, 'Excellent work ethic and quick learner. Very reliable and safety-conscious.', 5, 5, 4, 5, ARRAY['Wiring Installation', 'Safety Protocols', 'Hand Tools'], 'Residential Wiring Assistant');
+-- Add more sample data if needed for other tables
+-- Example for job_postings (assuming shop-1 exists)
+INSERT INTO job_postings (id, shop_id, title, description, apprentices_needed, expected_duration, days_needed, start_date, hours_per_day, work_days, pay_rate, requirements, required_skills, priority, status, applicants, posted_date)
+VALUES
+('job-1', 'shop-1', 'Residential Wiring Project', 'Need an apprentice for a new home wiring project.', 1, '2 weeks', 10, '2025-08-01', 8, ARRAY['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'], '$25/hour', ARRAY['Must have basic tools'], ARRAY['Wiring Installation', 'Safety Protocols'], 'high', 'active', 0, NOW())
+ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO time_entries (id, job_id, apprentice_id, date, hours, approved) VALUES
-('g0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '2025-01-10', 8.00, TRUE),
-('h0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '2025-01-11', 8.00, TRUE),
-('i0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '2025-01-12', 8.00, TRUE),
-('j0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '2025-01-13', 8.00, TRUE),
-('k0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '2025-01-14', 8.00, TRUE),
-('l0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '2025-01-15', 8.00, TRUE),
-('m0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'd0eebc99-c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '2025-01-16', 8.00, TRUE),
-('n0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '2025-01-17', 8.00, FALSE);
+-- Example for active_jobs (assuming job-1 and apprentice-1 exist)
+INSERT INTO active_jobs (id, job_posting_id, shop_id, apprentice_id, title, shop_name, apprentice_name, start_date, total_days, hours_per_day, pay_rate, status)
+VALUES
+('active-job-1', 'job-1', 'shop-1', 'apprentice-1', 'Residential Wiring Project', 'Bay Area Electric Co.', 'Marcus C.', '2025-08-01', 10, 8, '$25/hour', 'in-progress')
+ON CONFLICT (id) DO NOTHING;
