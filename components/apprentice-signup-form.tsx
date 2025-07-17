@@ -39,16 +39,27 @@ export function ApprenticeSignupForm() {
   const { toast } = useToast()
 
   const availableSkills = [
+    "Basic Electrical Theory",
     "Wiring Installation",
     "Circuit Analysis",
+    "Motor Controls",
+    "Panel Installation",
+    "Conduit Bending",
     "Blueprint Reading",
     "Safety Protocols",
     "Hand Tools",
     "Power Tools",
-    "Conduit Bending",
-    "Panel Installation",
-    "Motor Controls",
     "Troubleshooting",
+    "Low Voltage Systems",
+    "High Voltage Systems",
+    "Residential Wiring",
+    "Commercial Wiring",
+    "Industrial Wiring",
+    "Electrical Code Compliance",
+    "Fixture Installation",
+    "Generator Installation",
+    "Transformer Installation",
+    "PLC Programming",
   ]
 
   const handleChange = (field: string, value: string | boolean) => {
@@ -294,7 +305,7 @@ export function ApprenticeSignupForm() {
             id="education"
             value={formData.education}
             onChange={(e) => handleChange("education", e.target.value)}
-            placeholder="e.g., Trade School, Community College"
+            placeholder="e.g., Electrical Trade School, Community College"
             className="border-yellow-200 focus:border-yellow-500"
           />
         </div>
@@ -330,7 +341,7 @@ export function ApprenticeSignupForm() {
       </div>
 
       <div className="space-y-2">
-        <Label className="text-gray-700">Skills</Label>
+        <Label className="text-gray-700">Electrical Skills</Label>
         <div className="grid grid-cols-2 gap-2">
           {availableSkills.map((skill) => (
             <div key={skill} className="flex items-center space-x-2">
@@ -357,7 +368,7 @@ export function ApprenticeSignupForm() {
             className="border-yellow-300 data-[state=checked]:bg-yellow-500"
           />
           <Label htmlFor="willingToTravel" className="text-gray-700">
-            Willing to travel for work
+            Willing to travel for electrical work
           </Label>
         </div>
         <div className="flex items-center space-x-2">
@@ -368,7 +379,7 @@ export function ApprenticeSignupForm() {
             className="border-yellow-300 data-[state=checked]:bg-yellow-500"
           />
           <Label htmlFor="hasOwnTools" className="text-gray-700">
-            I have my own tools
+            I have my own electrical tools
           </Label>
         </div>
         <div className="flex items-center space-x-2">
@@ -392,13 +403,13 @@ export function ApprenticeSignupForm() {
           id="bio"
           value={formData.bio}
           onChange={(e) => handleChange("bio", e.target.value)}
-          placeholder="Tell us about yourself and your experience..."
+          placeholder="Tell us about yourself and your electrical experience..."
           className="border-yellow-200 focus:border-yellow-500"
         />
       </div>
 
       <Button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-600" disabled={isLoading}>
-        {isLoading ? "Creating Account..." : "Create Apprentice Account"}
+        {isLoading ? "Creating Account..." : "Create Electrical Apprentice Account"}
       </Button>
     </form>
   )

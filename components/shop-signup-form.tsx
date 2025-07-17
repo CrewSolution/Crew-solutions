@@ -59,6 +59,8 @@ export function ShopSignupForm() {
           type: "shop",
           email: formData.email,
           password: formData.password,
+          first_name: formData.ownerName.split(" ")[0] || null, // Extract first name from ownerName
+          last_name: formData.ownerName.split(" ")[1] || null, // Extract last name from ownerName
           business_name: formData.businessName,
           owner_name: formData.ownerName,
           phone: formData.phone,
@@ -103,7 +105,7 @@ export function ShopSignupForm() {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="businessName" className="text-gray-700">
-            Business Name *
+            Electrical Business Name *
           </Label>
           <Input
             id="businessName"
@@ -185,18 +187,18 @@ export function ShopSignupForm() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="businessType" className="text-gray-700">
-            Business Type
+            Electrical Business Type
           </Label>
           <Select onValueChange={(value) => handleChange("businessType", value)}>
             <SelectTrigger className="border-yellow-200 focus:border-yellow-500">
               <SelectValue placeholder="Select business type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="electrical">Electrical Contractor</SelectItem>
-              <SelectItem value="plumbing">Plumbing Contractor</SelectItem>
-              <SelectItem value="hvac">HVAC Contractor</SelectItem>
-              <SelectItem value="carpentry">Carpentry/Construction</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
+              <SelectItem value="residential">Residential Electrical</SelectItem>
+              <SelectItem value="commercial">Commercial Electrical</SelectItem>
+              <SelectItem value="industrial">Industrial Electrical</SelectItem>
+              <SelectItem value="specialty">Specialty Electrical</SelectItem>
+              <SelectItem value="other_electrical">Other Electrical</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -243,7 +245,7 @@ export function ShopSignupForm() {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="yearsInBusiness" className="text-gray-700">
-            Years in Business
+            Years in Electrical Business
           </Label>
           <Input
             id="yearsInBusiness"
@@ -255,7 +257,7 @@ export function ShopSignupForm() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="licenseNumber" className="text-gray-700">
-            License Number
+            Electrical License Number
           </Label>
           <Input
             id="licenseNumber"
@@ -268,19 +270,19 @@ export function ShopSignupForm() {
 
       <div className="space-y-2">
         <Label htmlFor="bio" className="text-gray-700">
-          Business Description
+          Electrical Business Description
         </Label>
         <Textarea
           id="bio"
           value={formData.bio}
           onChange={(e) => handleChange("bio", e.target.value)}
-          placeholder="Tell us about your business..."
+          placeholder="Tell us about your electrical business..."
           className="border-yellow-200 focus:border-yellow-500"
         />
       </div>
 
       <Button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-600" disabled={isLoading}>
-        {isLoading ? "Creating Account..." : "Create Shop Account"}
+        {isLoading ? "Creating Account..." : "Create Electrical Shop Account"}
       </Button>
     </form>
   )

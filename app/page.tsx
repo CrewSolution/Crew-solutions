@@ -23,7 +23,7 @@ import { Separator } from "@/components/ui/separator"
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
 
 export default function LandingPage() {
-  // Hardcoded demo apprentice profiles
+  // Hardcoded demo apprentice profiles, now tailored for electricians
   const apprenticeProfiles = [
     {
       id: "demo-apprentice-1",
@@ -41,40 +41,40 @@ export default function LandingPage() {
     {
       id: "demo-apprentice-2",
       name: "Sarah Lee",
-      title: "Plumbing Apprentice",
+      title: "Electrical Apprentice",
       rating: 4.7,
       jobsCompleted: 9,
       location: "Oakland, CA",
       experience: "1.5 years experience",
       education: "Community College Program",
-      skills: ["Pipe Fitting", "Drain Cleaning", "Fixture Installation", "Water Heater Repair"],
-      bio: "Enthusiastic plumbing apprentice committed to mastering the trade. Proficient in various plumbing techniques and always ready for a new challenge.",
+      skills: ["Circuit Analysis", "Panel Installation", "Conduit Bending", "Motor Controls"],
+      bio: "Enthusiastic electrical apprentice committed to mastering the trade. Proficient in various electrical techniques and always ready for a new challenge.",
       profileImage: "/placeholder.svg?height=100&width=100",
     },
     {
       id: "demo-apprentice-3",
       name: "David Kim",
-      title: "HVAC Apprentice",
+      title: "Electrical Apprentice",
       rating: 4.9,
       jobsCompleted: 15,
       location: "San Jose, CA",
       experience: "3 years experience",
       education: "Vocational Training",
-      skills: ["HVAC Installation", "Refrigeration", "System Diagnostics", "Maintenance"],
-      bio: "Experienced HVAC apprentice specializing in installation and maintenance of heating and cooling systems. Detail-oriented and committed to quality work.",
+      skills: ["Industrial Wiring", "High Voltage Systems", "PLC Programming", "Electrical Code Compliance"],
+      bio: "Experienced electrical apprentice specializing in industrial and commercial electrical systems. Detail-oriented and committed to quality work.",
       profileImage: "/placeholder.svg?height=100&width=100",
     },
     {
       id: "demo-apprentice-4",
       name: "Jessica Brown",
-      title: "Carpentry Apprentice",
+      title: "Electrical Apprentice",
       rating: 4.6,
       jobsCompleted: 10,
       location: "Berkeley, CA",
       experience: "1 year experience",
       education: "Apprenticeship Program",
-      skills: ["Framing", "Finishing", "Cabinetry", "Tool Usage"],
-      bio: "Passionate carpentry apprentice with a keen eye for detail and a strong work ethic. Eager to build on foundational skills and contribute to diverse projects.",
+      skills: ["Residential Wiring", "Low Voltage Systems", "Fixture Installation", "Electrical Safety"],
+      bio: "Passionate electrical apprentice with a keen eye for detail and a strong work ethic. Eager to build on foundational skills and contribute to diverse projects.",
       profileImage: "/placeholder.svg?height=100&width=100",
     },
   ]
@@ -84,7 +84,7 @@ export default function LandingPage() {
       name: "John Smith",
       role: "Owner, Elite Electrical Services",
       content:
-        "Crew Solutions has transformed how we find skilled apprentices. The quality of candidates is exceptional, and the platform makes hiring so much easier.",
+        "Crew Solutions has transformed how we find skilled electrical apprentices. The quality of candidates is exceptional, and the platform makes hiring so much easier.",
       rating: 5,
       avatar: "/placeholder.svg?height=60&width=60",
     },
@@ -92,15 +92,15 @@ export default function LandingPage() {
       name: "Sarah Johnson",
       role: "Electrical Apprentice",
       content:
-        "I found my dream job through Crew Solutions! The platform connected me with amazing shops and helped advance my career in the electrical trade.",
+        "I found my dream job through Crew Solutions! The platform connected me with amazing electrical shops and helped advance my career in the electrical trade.",
       rating: 5,
       avatar: "/placeholder.svg?height=60&width=60",
     },
     {
       name: "Mike Rodriguez",
-      role: "Owner, Bay Area HVAC",
+      role: "Owner, Bay Area Electrical",
       content:
-        "The apprentices we've hired through Crew Solutions have been outstanding. Great work ethic, skills, and professionalism. Highly recommend!",
+        "The electrical apprentices we've hired through Crew Solutions have been outstanding. Great work ethic, skills, and professionalism. Highly recommend!",
       rating: 5,
       avatar: "/placeholder.svg?height=60&width=60",
     },
@@ -134,22 +134,23 @@ export default function LandingPage() {
               <div className="flex flex-col justify-center space-y-4">
                 <div className="space-y-2">
                   <h1 className="text-3xl font-bold tracking-tighter sm:text-5xl xl:text-6xl/none text-gray-900">
-                    Connect with Top Apprentices for Your Crew
+                    Connect with Top Electrical Apprentices for Your Crew
                   </h1>
                   <p className="max-w-[600px] text-gray-600 md:text-xl">
-                    Crew Solutions helps shops find skilled apprentices for short-term projects and long-term needs.
+                    Crew Solutions helps electrical shops find skilled apprentices for short-term projects and long-term
+                    needs.
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 min-[400px]:flex-row">
                   <Button asChild className="bg-yellow-500 hover:bg-yellow-600 text-white">
-                    <Link href="/signup?type=shop">Join as a Shop</Link>
+                    <Link href="/signup?type=shop">Join as an Electrical Shop</Link>
                   </Button>
                   <Button
                     asChild
                     variant="outline"
                     className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 bg-transparent"
                   >
-                    <Link href="/signup?type=apprentice">Join as an Apprentice</Link>
+                    <Link href="/signup?type=apprentice">Join as an Electrical Apprentice</Link>
                   </Button>
                 </div>
               </div>
@@ -173,11 +174,11 @@ export default function LandingPage() {
                   Our Platform
                 </div>
                 <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-gray-900">
-                  Connecting Skilled Trades Professionals
+                  Connecting Electrical Professionals
                 </h2>
                 <p className="max-w-[900px] text-gray-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  We bridge the gap between experienced shops and talented apprentices, creating opportunities for
-                  growth and success in the skilled trades industry.
+                  We bridge the gap between experienced electrical shops and talented electrical apprentices, creating
+                  opportunities for growth and success in the electrical industry.
                 </p>
               </div>
             </div>
@@ -186,18 +187,18 @@ export default function LandingPage() {
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <BriefcaseIcon className="h-8 w-8 text-yellow-500" />
-                    <CardTitle className="text-yellow-600">For Shops</CardTitle>
+                    <CardTitle className="text-yellow-600">For Electrical Shops</CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent>
                   <CardDescription className="text-gray-600">
-                    Find qualified apprentices quickly and efficiently. Post jobs, review profiles, and connect with
-                    skilled workers ready to contribute to your projects.
+                    Find qualified electrical apprentices quickly and efficiently. Post jobs, review profiles, and
+                    connect with skilled workers ready to contribute to your electrical projects.
                   </CardDescription>
                   <ul className="mt-4 space-y-2 text-sm text-gray-600">
                     <li className="flex items-center gap-2">
                       <CheckCircleIcon className="h-4 w-4 text-yellow-500" />
-                      Access to pre-screened apprentices
+                      Access to pre-screened electrical apprentices
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircleIcon className="h-4 w-4 text-yellow-500" />
@@ -212,20 +213,18 @@ export default function LandingPage() {
               </Card>
               <Card className="border-yellow-200 shadow-lg">
                 <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <GraduationCapIcon className="h-8 w-8 text-yellow-500" />
-                    <CardTitle className="text-yellow-600">For Apprentices</CardTitle>
-                  </div>
+                  <GraduationCapIcon className="h-8 w-8 text-yellow-500" />
+                  <CardTitle className="text-yellow-600">For Electrical Apprentices</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <CardDescription className="text-gray-600">
-                    Discover exciting opportunities with reputable shops. Build your skills, gain experience, and
-                    advance your career in the skilled trades.
+                    Discover exciting opportunities with reputable electrical shops. Build your skills, gain experience,
+                    and advance your career in the electrical trade.
                   </CardDescription>
                   <ul className="mt-4 space-y-2 text-sm text-gray-600">
                     <li className="flex items-center gap-2">
                       <CheckCircleIcon className="h-4 w-4 text-yellow-500" />
-                      Browse quality job opportunities
+                      Browse quality electrical job opportunities
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircleIcon className="h-4 w-4 text-yellow-500" />
@@ -233,7 +232,7 @@ export default function LandingPage() {
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircleIcon className="h-4 w-4 text-yellow-500" />
-                      Connect with established shops
+                      Connect with established electrical shops
                     </li>
                   </ul>
                 </CardContent>
@@ -249,11 +248,11 @@ export default function LandingPage() {
               <div className="space-y-2">
                 <div className="inline-block rounded-lg bg-yellow-200 px-3 py-1 text-sm text-yellow-800">Features</div>
                 <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-gray-900">
-                  Everything You Need to Succeed
+                  Everything You Need to Succeed in Electrical
                 </h2>
                 <p className="max-w-[900px] text-gray-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  Our platform provides comprehensive tools for both shops and apprentices to thrive in the skilled
-                  trades industry.
+                  Our platform provides comprehensive tools for both electrical shops and apprentices to thrive in the
+                  electrical industry.
                 </p>
               </div>
             </div>
@@ -261,11 +260,12 @@ export default function LandingPage() {
               <Card className="border-yellow-200 shadow-lg">
                 <CardHeader>
                   <Users className="h-12 w-12 text-yellow-500 mb-4" />
-                  <CardTitle className="text-yellow-600">Smart Matching</CardTitle>
+                  <CardTitle className="text-yellow-600">Smart Electrical Matching</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <CardDescription className="text-gray-600">
-                    Our algorithm matches apprentices with shops based on skills, location, and project requirements.
+                    Our algorithm matches electrical apprentices with shops based on skills, location, and project
+                    requirements.
                   </CardDescription>
                 </CardContent>
               </Card>
@@ -283,7 +283,7 @@ export default function LandingPage() {
               <Card className="border-yellow-200 shadow-lg">
                 <CardHeader>
                   <Shield className="h-12 w-12 text-yellow-500 mb-4" />
-                  <CardTitle className="text-yellow-600">Verified Profiles</CardTitle>
+                  <CardTitle className="text-yellow-600">Verified Electrical Profiles</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <CardDescription className="text-gray-600">
@@ -298,7 +298,7 @@ export default function LandingPage() {
                 </CardHeader>
                 <CardContent>
                   <CardDescription className="text-gray-600">
-                    Transparent review and rating system helps build trust and reputation in the community.
+                    Transparent review and rating system helps build trust and reputation in the electrical community.
                   </CardDescription>
                 </CardContent>
               </Card>
@@ -320,7 +320,7 @@ export default function LandingPage() {
                 </CardHeader>
                 <CardContent>
                   <CardDescription className="text-gray-600">
-                    Find opportunities in your local area with our location-based matching system.
+                    Find electrical opportunities in your local area with our location-based matching system.
                   </CardDescription>
                 </CardContent>
               </Card>
@@ -337,11 +337,11 @@ export default function LandingPage() {
                   How It Works
                 </div>
                 <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-gray-900">
-                  Simple Steps to Build Your Dream Crew
+                  Simple Steps to Build Your Electrical Crew
                 </h2>
                 <p className="max-w-[900px] text-gray-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  Whether you're a shop looking for talent or an apprentice seeking opportunities, Crew Solutions makes
-                  connections easy.
+                  Whether you're an electrical shop looking for talent or an electrical apprentice seeking
+                  opportunities, Crew Solutions makes connections easy.
                 </p>
               </div>
             </div>
@@ -352,16 +352,16 @@ export default function LandingPage() {
                 </div>
                 <CardTitle className="text-yellow-600 mb-2">1. Sign Up</CardTitle>
                 <CardDescription className="text-gray-600">
-                  Create your profile as a shop or an apprentice.
+                  Create your profile as an electrical shop or an electrical apprentice.
                 </CardDescription>
               </Card>
               <Card className="flex flex-col items-center p-6 text-center border-yellow-200 shadow-lg">
                 <div className="rounded-full bg-yellow-100 p-4 mb-4">
                   <BriefcaseIcon className="h-12 w-12 text-yellow-500" />
                 </div>
-                <CardTitle className="text-yellow-600 mb-2">2. Post or Browse Jobs</CardTitle>
+                <CardTitle className="text-yellow-600 mb-2">2. Post or Browse Electrical Jobs</CardTitle>
                 <CardDescription className="text-gray-600">
-                  Shops post projects, apprentices find matching opportunities.
+                  Electrical shops post projects, apprentices find matching opportunities.
                 </CardDescription>
               </Card>
               <Card className="flex flex-col items-center p-6 text-center border-yellow-200 shadow-lg">
@@ -370,7 +370,7 @@ export default function LandingPage() {
                 </div>
                 <CardTitle className="text-yellow-600 mb-2">3. Connect & Collaborate</CardTitle>
                 <CardDescription className="text-gray-600">
-                  Apprentices get hired, complete jobs, and build their reputation.
+                  Electrical apprentices get hired, complete jobs, and build their reputation.
                 </CardDescription>
               </Card>
             </div>
@@ -383,11 +383,13 @@ export default function LandingPage() {
             <div className="flex flex-col items-center justify-center space-y-4 text-center">
               <div className="space-y-2">
                 <div className="inline-block rounded-lg bg-yellow-200 px-3 py-1 text-sm text-yellow-800">
-                  Featured Apprentices
+                  Featured Electrical Apprentices
                 </div>
-                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-gray-900">Meet Our Top Talent</h2>
+                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-gray-900">
+                  Meet Our Top Electrical Talent
+                </h2>
                 <p className="max-w-[900px] text-gray-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  Browse highly-rated apprentices ready for their next project.
+                  Browse highly-rated electrical apprentices ready for their next project.
                 </p>
               </div>
             </div>
@@ -468,9 +470,11 @@ export default function LandingPage() {
                 <div className="inline-block rounded-lg bg-yellow-100 px-3 py-1 text-sm text-yellow-800">
                   Testimonials
                 </div>
-                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-gray-900">What Our Users Say</h2>
+                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-gray-900">
+                  What Our Electrical Users Say
+                </h2>
                 <p className="max-w-[900px] text-gray-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  Hear from shops and apprentices who have found success through Crew Solutions.
+                  Hear from electrical shops and apprentices who have found success through Crew Solutions.
                 </p>
               </div>
             </div>
@@ -516,7 +520,7 @@ export default function LandingPage() {
                 </div>
                 <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-gray-900">Get in Touch</h2>
                 <p className="max-w-[900px] text-gray-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  Have questions? We're here to help you succeed in the skilled trades industry.
+                  Have questions? We're here to help you succeed in the electrical industry.
                 </p>
               </div>
             </div>
@@ -574,22 +578,22 @@ export default function LandingPage() {
           <div className="container grid items-center gap-6 px-4 md:px-6 lg:grid-cols-2 lg:gap-10">
             <div className="space-y-2">
               <h2 className="text-3xl font-bold tracking-tighter md:text-4xl/tight text-gray-900">
-                Ready to Build Your Crew or Start Your Career?
+                Ready to Build Your Electrical Crew or Start Your Electrical Career?
               </h2>
               <p className="max-w-[600px] text-gray-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                Sign up today and discover the future of skilled trades.
+                Sign up today and discover the future of the electrical trade.
               </p>
             </div>
             <div className="flex flex-col gap-2 min-[400px]:flex-row lg:justify-end">
               <Button asChild className="bg-yellow-500 hover:bg-yellow-600">
-                <Link href="/signup?type=shop">Join as a Shop</Link>
+                <Link href="/signup?type=shop">Join as an Electrical Shop</Link>
               </Button>
               <Button
                 asChild
                 variant="outline"
                 className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 bg-transparent"
               >
-                <Link href="/signup?type=apprentice">Join as an Apprentice</Link>
+                <Link href="/signup?type=apprentice">Join as an Electrical Apprentice</Link>
               </Button>
             </div>
           </div>
@@ -597,7 +601,7 @@ export default function LandingPage() {
       </main>
 
       <footer className="flex flex-col gap-2 sm:flex-row py-6 w-full shrink-0 items-center px-4 md:px-6 border-t border-yellow-200 bg-yellow-50">
-        <p className="text-xs text-gray-600">© 2024 Crew Solutions. All rights reserved.</p>
+        <p className="text-xs text-gray-600">Copyright 2024 Crew Solutions. All rights reserved.</p>
         <nav className="sm:ml-auto flex gap-4 sm:gap-6">
           <Link
             className="text-xs hover:underline underline-offset-4 text-gray-600 hover:text-yellow-600"
