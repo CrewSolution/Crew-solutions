@@ -140,11 +140,29 @@ const API_BASE_URL = "/api"
 
 async function fetchData<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options)
-  if (!response.ok) {
-    const errorData = await response.json()
-    throw new Error(errorData.message || "Something went wrong")
+
+  // Try to decode the body as JSON first.
+  async function parseBody() {
+    try {
+      return await response.json()
+    } catch {
+      // If JSON fails, return plain text instead.
+      const text = await response.text()
+      return { message: text }
+    }
   }
-  return response.json()
+
+  const data = await parseBody()
+
+  if (!response.ok) {
+    // data may be an object (parsed JSON) or `{ message: string }` fallback
+    const message =
+      (typeof data === "object" && data !== null && "message" in data && (data as any).message) ||
+      `Request failed with status ${response.status}`
+    throw new Error(message as string)
+  }
+
+  return data as T
 }
 
 // User management
