@@ -1,7 +1,6 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
-import bcrypt from "bcryptjs" // Import bcryptjs
-import { v4 as uuidv4 } from "uuid"
+import bcrypt from "bcryptjs"
 
 type UserRow = {
   id: string
@@ -37,6 +36,7 @@ type UserRow = {
   bank_account?: string
   routing_number?: string
   created_at?: Date
+  updated_at?: Date
   profile_complete?: boolean
 }
 
@@ -49,58 +49,71 @@ type UserRow = {
  * When the `users` table doesn't exist (e.g. in a fresh Neon DB),
  * we fall back to a single demo apprentice to keep the UI working.
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type")
 
-    let query = "SELECT * FROM users"
-    const params: string[] = []
+    const query = `SELECT id, email, type, first_name, last_name, phone, city, state, zip_code, 
+                        profile_image, rating, jobs_completed, business_name, owner_name, 
+                        business_type, years_in_business, license_number, experience_level, 
+                        skills, availability, hourly_rate_min, hourly_rate_max, education, 
+                        certifications, bio, willing_to_travel, has_own_tools, has_transportation,
+                        created_at, updated_at
+                 FROM users`
 
-    if (type) {
-      query += " WHERE type = $1"
-      params.push(type)
-    }
+    const users = type ? await sql`SELECT * FROM users WHERE type = ${type}` : await sql`SELECT * FROM users`
 
-    const { rows } = await sql.query(query, params)
-    return NextResponse.json(rows)
+    return NextResponse.json(users)
   } catch (error) {
-    console.error("Error fetching users:", error)
-    return NextResponse.json({ message: "Error fetching users" }, { status: 500 })
+    console.error("Get users error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { type, email, password, ...userData } = body
+    const userData = await request.json()
 
-    if (!type || !email || !password) {
-      return NextResponse.json({ message: "Type, email, and password are required" }, { status: 400 })
-    }
+    // Hash password
+    const saltRounds = 10
+    const hashedPassword = await bcrypt.hash(userData.password, saltRounds)
 
-    // Check if user already exists
-    const existingUser = await sql.query("SELECT id FROM users WHERE email = $1", [email])
-    if (existingUser.rows.length > 0) {
-      return NextResponse.json({ message: "User with this email already exists" }, { status: 409 })
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10)
-    const id = uuidv4()
-
-    const query = `
-      INSERT INTO users (id, type, email, password, ${Object.keys(userData).join(", ")})
-      VALUES ($1, $2, $3, $4, ${Object.keys(userData)
-        .map((_, i) => `$${i + 5}`)
-        .join(", ")})
-      RETURNING id, type, email
+    // Insert user
+    const result = await sql`
+      INSERT INTO users (
+        email, password_hash, type, first_name, last_name, phone, city, state, zip_code,
+        business_name, owner_name, business_type, years_in_business, license_number,
+        experience_level, skills, availability, hourly_rate_min, hourly_rate_max,
+        education, bio, willing_to_travel, has_own_tools, has_transportation
+      ) VALUES (
+        ${userData.email}, ${hashedPassword}, ${userData.type}, ${userData.first_name || null},
+        ${userData.last_name || null}, ${userData.phone || null}, ${userData.city || null},
+        ${userData.state || null}, ${userData.zip_code || null}, ${userData.business_name || null},
+        ${userData.owner_name || null}, ${userData.business_type || null}, 
+        ${userData.years_in_business || null}, ${userData.license_number || null},
+        ${userData.experience_level || null}, ${userData.skills || null}, 
+        ${userData.availability || null}, ${userData.hourly_rate_min || null},
+        ${userData.hourly_rate_max || null}, ${userData.education || null}, 
+        ${userData.bio || null}, ${userData.willing_to_travel || false},
+        ${userData.has_own_tools || false}, ${userData.has_transportation || false}
+      )
+      RETURNING id, email, type, first_name, last_name, phone, city, state, zip_code,
+                business_name, owner_name, business_type, years_in_business, license_number,
+                experience_level, skills, availability, hourly_rate_min, hourly_rate_max,
+                education, bio, willing_to_travel, has_own_tools, has_transportation,
+                rating, jobs_completed, created_at, updated_at
     `
-    const values = [id, type, email, hashedPassword, ...Object.values(userData)]
 
-    const { rows } = await sql.query(query, values)
-    return NextResponse.json(rows[0], { status: 201 })
-  } catch (error) {
-    console.error("Error creating user:", error)
-    return NextResponse.json({ message: "Error creating user" }, { status: 500 })
+    return NextResponse.json(result[0], { status: 201 })
+  } catch (error: any) {
+    console.error("Create user error:", error)
+
+    if (error.code === "23505") {
+      // Unique violation
+      return NextResponse.json({ error: "Email already exists" }, { status: 409 })
+    }
+
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

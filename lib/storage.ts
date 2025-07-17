@@ -1,307 +1,350 @@
-import type { User, JobPosting, ActiveJob, JobInvitation, Review, TimeEntry } from "./types"
+// This file maintains localStorage functionality for demo purposes
+// In production, this would be replaced with actual API calls
 
-const API_BASE_URL = "/api"
+export interface User {
+  id: string
+  email: string
+  type: "shop" | "apprentice"
+  firstName?: string
+  lastName?: string
+  phone?: string
+  city?: string
+  state?: string
+  zipCode?: string
+  profileImage?: string
+  rating?: number
+  jobsCompleted?: number
 
-// Helper to handle API responses
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const errorData = await response.json()
-    throw new Error(errorData.message || "Something went wrong")
+  // Shop-specific fields
+  businessName?: string
+  ownerName?: string
+  businessType?: string
+  yearsInBusiness?: number
+  licenseNumber?: string
+
+  // Apprentice-specific fields
+  experienceLevel?: string
+  skills?: string[]
+  availability?: string
+  hourlyRateMin?: number
+  hourlyRateMax?: number
+  education?: string
+  bio?: string
+  willingToTravel?: boolean
+  hasOwnTools?: boolean
+  hasTransportation?: boolean
+}
+
+export interface JobPosting {
+  id: string
+  shopId: string
+  title: string
+  description: string
+  apprenticesNeeded: number
+  expectedDuration?: string
+  daysNeeded: number
+  startDate: string
+  hoursPerDay: number
+  workDays: string[]
+  payRate: string
+  requirements?: string[]
+  requiredSkills?: string[]
+  priority: "high" | "medium" | "low"
+  status: "active" | "filled" | "cancelled"
+  applicants: number
+  postedDate: string
+}
+
+export interface JobInvitation {
+  id: string
+  jobPostingId: string
+  shopId: string
+  apprenticeId: string
+  shopName: string
+  title: string
+  description: string
+  payRate: string
+  daysNeeded: number
+  startDate: string
+  hoursPerDay: number
+  workDays: string[]
+  requirements?: string[]
+  requiredSkills?: string[]
+  status: "pending" | "accepted" | "declined"
+}
+
+export interface ActiveJob {
+  id: string
+  jobPostingId?: string
+  shopId: string
+  apprenticeId: string
+  title: string
+  shopName: string
+  apprenticeName: string
+  startDate: string
+  totalDays: number
+  hoursPerDay: number
+  payRate: string
+  status: "in-progress" | "completed" | "reviewed"
+  daysWorked: number
+  totalHours: number
+  pendingHours: number
+  canComplete: boolean
+  canSubmitHours: boolean
+}
+
+export interface Review {
+  id: string
+  jobId: string
+  reviewerId: string
+  revieweeId: string
+  reviewerType: "shop" | "apprentice"
+  rating: number
+  comment: string
+  jobTitle: string
+  date: string
+}
+
+// Storage keys
+const USERS_KEY = "crew_solutions_users"
+const CURRENT_USER_KEY = "crew_solutions_current_user"
+const JOB_POSTINGS_KEY = "crew_solutions_job_postings"
+const JOB_INVITATIONS_KEY = "crew_solutions_job_invitations"
+const ACTIVE_JOBS_KEY = "crew_solutions_active_jobs"
+const REVIEWS_KEY = "crew_solutions_reviews"
+
+// Helper functions
+const getFromStorage = <T>(key: string): T[] => {\
+  if (typeof window === "undefined") return []
+  const data = localStorage.getItem(key)
+  return data ? JSON.parse(data) : []
+}
+
+const saveToStorage = <T>(key: string, data: T[]): void => {\
+  if (typeof window === "undefined") return
+  localStorage.setItem(key, JSON.stringify(data))
+}
+
+const generateId = (): string => {\
+  return Date.now().toString(36) + Math.random().toString(36).substr(2)
+}
+
+// User management\
+export const createUser = async (userData: Omit<User, "id">): Promise<User> => {\
+  const users = getFromStorage<User>(USERS_KEY)
+  
+  // Check if email already exists
+  if (users.some(user => user.email === userData.email)) {\
+    throw new Error("Email already exists")
   }
-  return response.json()
+  
+  const newUser: User = {
+    ...userData,\
+    id: generateId(),
+    rating: 0,
+    jobsCompleted: 0,
+  }
+  
+  users.push(newUser)
+  saveToStorage(USERS_KEY, users)
+  
+  return newUser
+}
+\
+export const authenticateUser = async (email: string, password: string): Promise<User | null> => {\
+  const users = getFromStorage<User>(USERS_KEY)
+  const user = users.find(u => u.email === email)
+  
+  // In a real app, you'd verify the password hash
+  // For demo purposes, we'll accept any password for existing users
+  if (user) {\
+    return user
+  }
+  
+  throw new Error("Invalid email or password")
 }
 
-// --- Authentication ---
-export async function authenticateUser(email: string, password: string): Promise<User | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-    })
-    const data = await handleResponse<{ user: User }>(response)
-    return data.user
-  } catch (error) {
-    console.error("Authentication failed:", error)
-    return null
+export const getCurrentUser = (): User | null => {\
+  if (typeof window === "undefined") return null
+  const userData = localStorage.getItem(CURRENT_USER_KEY)
+  return userData ? JSON.parse(userData) : null
+}
+
+export const setCurrentUser = (user: User | null): void => {\
+  if (typeof window === "undefined") return
+  if (user) {
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user))
+  } else {
+    localStorage.removeItem(CURRENT_USER_KEY)
   }
 }
 
-export async function getCurrentUser(): Promise<User | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/auth/session`)
-    if (response.status === 401) {
-      return null // Not authenticated
-    }
-    const data = await handleResponse<{ user: User }>(response)
-    return data.user
-  } catch (error) {
-    console.error("Failed to get current user:", error)
-    return null
+export const getUsers = (type?: "shop" | "apprentice"): User[] => {\
+  const users = getFromStorage<User>(USERS_KEY)
+  return type ? users.filter(user => user.type === type) : users
+}
+
+// Job posting management\
+export const createJobPosting = async (jobData: Omit<JobPosting, "id">): Promise<JobPosting> => {\
+  const jobs = getFromStorage<JobPosting>(JOB_POSTINGS_KEY)
+  
+  const newJob: JobPosting = {
+    ...jobData,\
+    id: generateId(),
+  }
+  
+  jobs.push(newJob)
+  saveToStorage(JOB_POSTINGS_KEY, jobs)
+  
+  return newJob
+}
+\
+export const getJobPostings = async (shopId?: string): Promise<JobPosting[]> => {\
+  const jobs = getFromStorage<JobPosting>(JOB_POSTINGS_KEY)
+  return shopId ? jobs.filter(job => job.shopId === shopId) : jobs
+}
+
+// Job invitation management\
+export const createJobInvitation = async (invitationData: Omit<JobInvitation, "id">): Promise<JobInvitation> => {\
+  const invitations = getFromStorage<JobInvitation>(JOB_INVITATIONS_KEY)
+  
+  const newInvitation: JobInvitation = {
+    ...invitationData,\
+    id: generateId(),
+  }
+  
+  invitations.push(newInvitation)
+  saveToStorage(JOB_INVITATIONS_KEY, invitations)
+  
+  return newInvitation
+}
+\
+export const getJobInvitations = async (apprenticeId: string, status?: string): Promise<JobInvitation[]> => {\
+  const invitations = getFromStorage<JobInvitation>(JOB_INVITATIONS_KEY)
+  let filtered = invitations.filter(inv => inv.apprenticeId === apprenticeId)
+  
+  if (status) {
+    filtered = filtered.filter(inv => inv.status === status)
+  }
+  
+  return filtered
+}
+
+export const updateJobInvitationStatus = async (invitationId: string, status: "accepted" | "declined"): Promise<void> => {\
+  const invitations = getFromStorage<JobInvitation>(JOB_INVITATIONS_KEY)
+  const index = invitations.findIndex(inv => inv.id === invitationId)
+  
+  if (index !== -1) {
+    invitations[index].status = status\
+    saveToStorage(JOB_INVITATIONS_KEY, invitations)
   }
 }
 
-export async function logoutUser(): Promise<void> {
-  try {
-    await fetch(`${API_BASE_URL}/auth/logout`, { method: "POST" })
-  } catch (error) {
-    console.error("Logout failed:", error)
+// Active job management\
+export const createActiveJob = async (jobData: Omit<ActiveJob, "id">): Promise<ActiveJob> => {\
+  const activeJobs = getFromStorage<ActiveJob>(ACTIVE_JOBS_KEY)
+  
+  const newActiveJob: ActiveJob = {
+    ...jobData,\
+    id: generateId(),
+  }
+  
+  activeJobs.push(newActiveJob)
+  saveToStorage(ACTIVE_JOBS_KEY, activeJobs)
+  
+  return newActiveJob
+}
+
+export const getActiveJobs = async (userId: string, userType: "shop" | "apprentice\", status?: string): Promise<ActiveJob[]> => {\
+  const activeJobs = getFromStorage<ActiveJob>(ACTIVE_JOBS_KEY)
+  let filtered = activeJobs.filter(job => 
+    userType === "shop" ? job.shopId === userId : job.apprenticeId === userId
+  )
+  
+  if (status) {
+    filtered = filtered.filter(job => job.status === status)
+  }
+  
+  return filtered
+}
+
+export const updateActiveJob = async (jobId: string, updates: Partial<ActiveJob>): Promise<void> => {
+  const activeJobs = getFromStorage<ActiveJob>(ACTIVE_JOBS_KEY)
+  const index = activeJobs.findIndex(job => job.id === jobId)
+  
+  if (index !== -1) {
+    activeJobs[index] = { ...activeJobs[index], ...updates }
+    saveToStorage(ACTIVE_JOBS_KEY, activeJobs)
   }
 }
 
-// --- User Management ---
-export async function saveUser(user: Partial<User>): Promise<User> {
-  const response = await fetch(`${API_BASE_URL}/users`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+// Review management
+export const createReview = async (reviewData: Omit<Review, "id" | "date">): Promise<Review> => {
+  const reviews = getFromStorage<Review>(REVIEWS_KEY)
+  
+  const newReview: Review = {
+    ...reviewData,
+    id: generateId(),
+    date: new Date().toISOString(),
+  }
+  
+  reviews.push(newReview)
+  saveToStorage(REVIEWS_KEY, reviews)
+  
+  return newReview
+}
+
+// Initialize sample data
+export const initializeSampleData = (): void => {
+  if (typeof window === "undefined") return
+  
+  // Only initialize if no users exist
+  const existingUsers = getFromStorage<User>(USERS_KEY)
+  if (existingUsers.length > 0) return
+  
+  const sampleUsers: User[] = [
+    {
+      id: "shop-1",
+      email: "shop@example.com",
+      type: "shop",
+      businessName: "Elite Electrical Services",
+      ownerName: "John Smith",
+      firstName: "John",
+      lastName: "Smith",
+      phone: "(555) 123-4567",
+      city: "San Francisco",
+      state: "CA",
+      zipCode: "94102",
+      businessType: "Electrical Contractor",
+      yearsInBusiness: 15,
+      licenseNumber: "C-10 #123456",
+      rating: 4.8,
+      jobsCompleted: 127,
     },
-    body: JSON.stringify(user),
-  })
-  return handleResponse<User>(response)
-}
-
-export async function getUser(id: string): Promise<User> {
-  const response = await fetch(`${API_BASE_URL}/users/${id}`)
-  return handleResponse<User>(response)
-}
-
-export async function getUsers(type?: "shop" | "apprentice"): Promise<User[]> {
-  const url = type ? `${API_BASE_URL}/users?type=${type}` : `${API_BASE_URL}/users`
-  const response = await fetch(url)
-  return handleResponse<User[]>(response)
-}
-
-export async function updateUser(id: string, updates: Partial<User>): Promise<User> {
-  const response = await fetch(`${API_BASE_URL}/users/${id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
+    {
+      id: "apprentice-1",
+      email: "apprentice@example.com",
+      type: "apprentice",
+      firstName: "Sarah",
+      lastName: "Johnson",
+      phone: "(555) 987-6543",
+      city: "Oakland",
+      state: "CA",
+      zipCode: "94601",
+      experienceLevel: "Intermediate",
+      skills: ["Wiring Installation", "Circuit Analysis", "Blueprint Reading", "Safety Protocols"],
+      availability: "Full-time",
+      hourlyRateMin: 22,
+      hourlyRateMax: 28,
+      education: "Community College Electrical Program",
+      bio: "Dedicated electrical apprentice with 2 years of hands-on experience in residential and commercial projects.",
+      rating: 4.6,
+      jobsCompleted: 23,
+      willingToTravel: true,
+      hasOwnTools: true,
+      hasTransportation: true,
     },
-    body: JSON.stringify(updates),
-  })
-  return handleResponse<User>(response)
-}
-
-export async function deleteUser(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/users/${id}`, {
-    method: "DELETE",
-  })
-  return handleResponse<void>(response)
-}
-
-// --- Job Posting Management ---
-export async function createJobPosting(job: Partial<JobPosting>): Promise<JobPosting> {
-  const response = await fetch(`${API_BASE_URL}/jobs`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(job),
-  })
-  return handleResponse<JobPosting>(response)
-}
-
-export async function getJobPosting(id: string): Promise<JobPosting> {
-  const response = await fetch(`${API_BASE_URL}/jobs/${id}`)
-  return handleResponse<JobPosting>(response)
-}
-
-export async function getJobPostings(shopId?: string, status?: string): Promise<JobPosting[]> {
-  let url = `${API_BASE_URL}/jobs`
-  const params = new URLSearchParams()
-  if (shopId) params.append("shopId", shopId)
-  if (status) params.append("status", status)
-  if (params.toString()) url += `?${params.toString()}`
-
-  const response = await fetch(url)
-  return handleResponse<JobPosting[]>(response)
-}
-
-export async function updateJobPosting(id: string, updates: Partial<JobPosting>): Promise<JobPosting> {
-  const response = await fetch(`${API_BASE_URL}/jobs/${id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(updates),
-  })
-  return handleResponse<JobPosting>(response)
-}
-
-export async function deleteJobPosting(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/jobs/${id}`, {
-    method: "DELETE",
-  })
-  return handleResponse<void>(response)
-}
-
-// --- Active Job Management ---
-export async function createActiveJob(job: Partial<ActiveJob>): Promise<ActiveJob> {
-  const response = await fetch(`${API_BASE_URL}/active-jobs`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(job),
-  })
-  return handleResponse<ActiveJob>(response)
-}
-
-export async function getActiveJob(id: string): Promise<ActiveJob> {
-  const response = await fetch(`${API_BASE_URL}/active-jobs/${id}`)
-  return handleResponse<ActiveJob>(response)
-}
-
-export async function getActiveJobs(filters?: { shopId?: string; apprenticeId?: string; status?: string }): Promise<
-  ActiveJob[]
-> {
-  let url = `${API_BASE_URL}/active-jobs`
-  const params = new URLSearchParams()
-  if (filters?.shopId) params.append("shopId", filters.shopId)
-  if (filters?.apprenticeId) params.append("apprenticeId", filters.apprenticeId)
-  if (filters?.status) params.append("status", filters.status)
-  if (params.toString()) url += `?${params.toString()}`
-
-  const response = await fetch(url)
-  return handleResponse<ActiveJob[]>(response)
-}
-
-export async function updateActiveJob(id: string, updates: Partial<ActiveJob>): Promise<ActiveJob> {
-  const response = await fetch(`${API_BASE_URL}/active-jobs/${id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(updates),
-  })
-  return handleResponse<ActiveJob>(response)
-}
-
-export async function deleteActiveJob(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/active-jobs/${id}`, {
-    method: "DELETE",
-  })
-  return handleResponse<void>(response)
-}
-
-// --- Job Invitation Management ---
-export async function createJobInvitation(invitation: Partial<JobInvitation>): Promise<JobInvitation> {
-  const response = await fetch(`${API_BASE_URL}/invitations`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(invitation),
-  })
-  return handleResponse<JobInvitation>(response)
-}
-
-export async function getJobInvitation(id: string): Promise<JobInvitation> {
-  const response = await fetch(`${API_BASE_URL}/invitations/${id}`)
-  return handleResponse<JobInvitation>(response)
-}
-
-export async function getJobInvitations(filters?: { shopId?: string; apprenticeId?: string; status?: string }): Promise<
-  JobInvitation[]
-> {
-  let url = `${API_BASE_URL}/invitations`
-  const params = new URLSearchParams()
-  if (filters?.shopId) params.append("shopId", filters.shopId)
-  if (filters?.apprenticeId) params.append("apprenticeId", filters.apprenticeId)
-  if (filters?.status) params.append("status", filters.status)
-  if (params.toString()) url += `?${params.toString()}`
-
-  const response = await fetch(url)
-  return handleResponse<JobInvitation[]>(response)
-}
-
-export async function updateJobInvitation(id: string, updates: Partial<JobInvitation>): Promise<JobInvitation> {
-  const response = await fetch(`${API_BASE_URL}/invitations/${id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(updates),
-  })
-  return handleResponse<JobInvitation>(response)
-}
-
-export async function deleteJobInvitation(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/invitations/${id}`, {
-    method: "DELETE",
-  })
-  return handleResponse<void>(response)
-}
-
-// --- Review Management ---
-export async function createReview(review: Partial<Review>): Promise<Review> {
-  const response = await fetch(`${API_BASE_URL}/reviews`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(review),
-  })
-  return handleResponse<Review>(response)
-}
-
-export async function getReviews(filters?: { reviewerId?: string; revieweeId?: string; jobId?: string }): Promise<
-  Review[]
-> {
-  let url = `${API_BASE_URL}/reviews`
-  const params = new URLSearchParams()
-  if (filters?.reviewerId) params.append("reviewerId", filters.reviewerId)
-  if (filters?.revieweeId) params.append("revieweeId", filters.revieweeId)
-  if (filters?.jobId) params.append("jobId", filters.jobId)
-  if (params.toString()) url += `?${params.toString()}`
-
-  const response = await fetch(url)
-  return handleResponse<Review[]>(response)
-}
-
-// --- Time Entry Management ---
-export async function createTimeEntry(timeEntry: Partial<TimeEntry>): Promise<TimeEntry> {
-  const response = await fetch(`${API_BASE_URL}/time-entries`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(timeEntry),
-  })
-  return handleResponse<TimeEntry>(response)
-}
-
-export async function getTimeEntries(filters?: { jobId?: string; apprenticeId?: string; approved?: boolean }): Promise<
-  TimeEntry[]
-> {
-  let url = `${API_BASE_URL}/time-entries`
-  const params = new URLSearchParams()
-  if (filters?.jobId) params.append("jobId", filters.jobId)
-  if (filters?.apprenticeId) params.append("apprenticeId", filters.apprenticeId)
-  if (typeof filters?.approved === "boolean") params.append("approved", String(filters.approved))
-  if (params.toString()) url += `?${params.toString()}`
-
-  const response = await fetch(url)
-  return handleResponse<TimeEntry[]>(response)
-}
-
-export async function updateTimeEntry(id: string, updates: Partial<TimeEntry>): Promise<TimeEntry> {
-  const response = await fetch(`${API_BASE_URL}/time-entries/${id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(updates),
-  })
-  return handleResponse<TimeEntry>(response)
-}
-
-export async function deleteTimeEntry(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/time-entries/${id}`, {
-    method: "DELETE",
-  })
-  return handleResponse<void>(response)
+  ]
+  
+  saveToStorage(USERS_KEY, sampleUsers)
 }

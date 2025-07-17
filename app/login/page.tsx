@@ -9,98 +9,147 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Zap, Eye, EyeOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { authenticateUser } from "@/lib/storage"
+import { authenticateUser, setCurrentUser, initializeSampleData } from "@/lib/storage"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
+  // Initialize sample data on component mount
+  useState(() => {
+    initializeSampleData()
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    setIsLoading(true)
+
     try {
       const user = await authenticateUser(email, password)
+
       if (user) {
+        setCurrentUser(user)
         toast({
-          title: "Login Successful!",
-          description: `Welcome back, ${user.email}.`,
+          title: "Login successful",
+          description: "Welcome back!",
         })
+
+        // Redirect based on user type
         if (user.type === "shop") {
           router.push("/dashboard/shop")
-        } else if (user.type === "apprentice") {
-          router.push("/dashboard/apprentice")
         } else {
-          router.push("/dashboard") // Fallback
+          router.push("/dashboard/apprentice")
         }
       } else {
+        // This else block might not be reached if authenticateUser throws an error for invalid credentials
         toast({
-          title: "Login Failed",
-          description: "Invalid email or password.",
+          title: "Login failed",
+          description: "Invalid email or password",
           variant: "destructive",
         })
       }
     } catch (error: any) {
+      console.error("Login error:", error)
       toast({
-        title: "Login Error",
-        description: error.message || "An unexpected error occurred.",
+        title: "Login error",
+        description: error.message || "An error occurred during login",
         variant: "destructive",
       })
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4 dark:bg-gray-900">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl">Login</CardTitle>
-          <CardDescription>Enter your email and password to access your account.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="m@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Logging In..." : "Login"}
-            </Button>
-          </form>
-          <div className="mt-4 text-center text-sm">
-            Don't have an account?{" "}
-            <Link className="underline" href="/signup">
-              Sign up
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div className="text-center">
+          <Link href="/" className="flex items-center justify-center gap-2 mb-6">
+            <Zap className="h-8 w-8 text-yellow-500" />
+            <span className="text-2xl font-bold">Crew Solutions</span>
+          </Link>
+          <h2 className="text-3xl font-bold">Sign in to your account</h2>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            Or{" "}
+            <Link href="/signup" className="font-medium text-yellow-600 hover:text-yellow-500">
+              create a new account
             </Link>
-          </div>
-          <div className="mt-2 text-center text-sm">
-            <p className="text-gray-500">Demo Accounts:</p>
-            <p className="text-gray-500">Shop: shop@example.com / password123</p>
-            <p className="text-gray-500">Apprentice: apprentice@example.com / password123</p>
-          </div>
-        </CardContent>
-      </Card>
+          </p>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Welcome back</CardTitle>
+            <CardDescription>Enter your credentials to access your account</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email address</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="Enter your email"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    placeholder="Enter your password"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Link href="/forgot-password" className="text-sm text-yellow-600 hover:text-yellow-500">
+                  Forgot your password?
+                </Link>
+              </div>
+
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "Signing in..." : "Sign in"}
+              </Button>
+            </form>
+
+            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Demo Accounts</h3>
+              <div className="space-y-2 text-xs text-blue-700 dark:text-blue-300">
+                <div>
+                  <strong>Shop Owner:</strong> shop@example.com / password123
+                </div>
+                <div>
+                  <strong>Apprentice:</strong> apprentice@example.com / password123
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

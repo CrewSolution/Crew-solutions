@@ -1,32 +1,42 @@
-import { NextResponse } from "next/server"
-import { authenticateUser } from "@/lib/storage" // Assuming this now interacts with your DB
-import { cookies } from "next/headers"
+import { type NextRequest, NextResponse } from "next/server"
+import { sql } from "@/lib/db"
+import bcrypt from "bcryptjs"
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json()
 
     if (!email || !password) {
-      return NextResponse.json({ message: "Email and password are required" }, { status: 400 })
+      return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
-    const user = await authenticateUser(email, password)
+    // Find user by email
+    const users = await sql`
+      SELECT * FROM users WHERE email = ${email}
+    `
 
-    if (!user) {
-      return NextResponse.json({ message: "Invalid credentials" }, { status: 401 })
+    if (users.length === 0) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
     }
 
-    // Set a session cookie (simplified for demonstration)
-    cookies().set("session", JSON.stringify({ userId: user.id, userType: user.type }), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24 * 7, // 1 week
-      path: "/",
+    const user = users[0]
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password_hash)
+
+    if (!isValidPassword) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+    }
+
+    // Remove password hash from response
+    const { password_hash, ...userWithoutPassword } = user
+
+    return NextResponse.json({
+      user: userWithoutPassword,
+      message: "Login successful",
     })
-
-    return NextResponse.json({ message: "Login successful", user: { id: user.id, type: user.type, email: user.email } })
   } catch (error) {
     console.error("Login error:", error)
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

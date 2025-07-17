@@ -1,106 +1,75 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
-import { cookies } from "next/headers"
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id } = params
-    const { rows } = await sql.query("SELECT * FROM job_postings WHERE id = $1", [id])
+    const jobs = await sql`
+      SELECT * FROM job_postings WHERE id = ${params.id}
+    `
 
-    if (rows.length === 0) {
-      return NextResponse.json({ message: "Job posting not found" }, { status: 404 })
+    if (jobs.length === 0) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 })
     }
-    return NextResponse.json(rows[0])
+
+    return NextResponse.json(jobs[0])
   } catch (error) {
-    console.error("Error fetching job posting:", error)
-    return NextResponse.json({ message: "Error fetching job posting" }, { status: 500 })
+    console.error("Get job error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const cookieStore = cookies()
-    const session = cookieStore.get("session")?.value
-    if (!session) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
-    }
-    const { userId, userType } = JSON.parse(session)
+    const jobData = await request.json()
 
-    const { id } = params
-    const body = await request.json()
-    const { applicants, ...updateData } = body // Exclude applicants from direct update
-
-    // Fetch the existing job posting to verify ownership
-    const existingJob = await sql.query("SELECT shop_id FROM job_postings WHERE id = $1", [id])
-    if (existingJob.rows.length === 0) {
-      return NextResponse.json({ message: "Job posting not found" }, { status: 404 })
-    }
-    if (existingJob.rows[0].shop_id !== userId || userType !== "shop") {
-      return NextResponse.json({ message: "Forbidden: You can only update your own job postings" }, { status: 403 })
-    }
-
-    const updateQueryParts: string[] = []
-    const updateValues: any[] = []
-    let paramIndex = 1
-
-    for (const key in updateData) {
-      updateQueryParts.push(`${key} = $${paramIndex++}`)
-      updateValues.push(updateData[key])
-    }
-
-    if (updateQueryParts.length === 0) {
-      return NextResponse.json({ message: "No update data provided" }, { status: 400 })
-    }
-
-    updateValues.push(id) // Add ID for WHERE clause
-
-    const query = `
-      UPDATE job_postings
-      SET ${updateQueryParts.join(", ")}
-      WHERE id = $${paramIndex}
+    const result = await sql`
+      UPDATE job_postings 
+      SET 
+        title = ${jobData.title},
+        description = ${jobData.description},
+        apprentices_needed = ${jobData.apprentices_needed},
+        expected_duration = ${jobData.expected_duration || null},
+        days_needed = ${jobData.days_needed},
+        start_date = ${jobData.start_date},
+        hours_per_day = ${jobData.hours_per_day},
+        work_days = ${jobData.work_days || []},
+        pay_rate = ${jobData.pay_rate},
+        requirements = ${jobData.requirements || []},
+        required_skills = ${jobData.required_skills || []},
+        priority = ${jobData.priority || "medium"},
+        status = ${jobData.status || "active"},
+        total_cost = ${jobData.total_cost || null},
+        weekly_payment = ${jobData.weekly_payment || null},
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${params.id}
       RETURNING *
     `
 
-    const { rows } = await sql.query(query, updateValues)
-
-    if (rows.length === 0) {
-      return NextResponse.json({ message: "Job posting not found or no changes made" }, { status: 404 })
+    if (result.length === 0) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 })
     }
-    return NextResponse.json(rows[0])
+
+    return NextResponse.json(result[0])
   } catch (error) {
-    console.error("Error updating job posting:", error)
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+    console.error("Update job error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const cookieStore = cookies()
-    const session = cookieStore.get("session")?.value
-    if (!session) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
-    }
-    const { userId, userType } = JSON.parse(session)
+    const result = await sql`
+      DELETE FROM job_postings WHERE id = ${params.id}
+      RETURNING *
+    `
 
-    const { id } = params
-
-    // Fetch the existing job posting to verify ownership
-    const existingJob = await sql.query("SELECT shop_id FROM job_postings WHERE id = $1", [id])
-    if (existingJob.rows.length === 0) {
-      return NextResponse.json({ message: "Job posting not found" }, { status: 404 })
-    }
-    if (existingJob.rows[0].shop_id !== userId || userType !== "shop") {
-      return NextResponse.json({ message: "Forbidden: You can only delete your own job postings" }, { status: 403 })
+    if (result.length === 0) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 })
     }
 
-    const { rowCount } = await sql.query("DELETE FROM job_postings WHERE id = $1", [id])
-
-    if (rowCount === 0) {
-      return NextResponse.json({ message: "Job posting not found" }, { status: 404 })
-    }
-    return NextResponse.json({ message: "Job posting deleted successfully" })
+    return NextResponse.json({ message: "Job deleted successfully" })
   } catch (error) {
-    console.error("Error deleting job posting:", error)
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+    console.error("Delete job error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

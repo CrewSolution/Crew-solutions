@@ -1,105 +1,107 @@
-import type { User, JobPosting } from "./types"
+import type { User, JobPosting } from "./storage"
 
-export function findMatchingApprentices(job: JobPosting, apprentices: User[]): User[] {
-  if (!job || !apprentices) {
-    return []
-  }
-
-  const requiredSkills = new Set(job.required_skills?.map((s) => s.toLowerCase()) || [])
-  const jobLocation = job.city?.toLowerCase() // Assuming job has a city field
-
-  return apprentices.filter((apprentice) => {
-    // 1. Check if apprentice is active and profile is complete
-    if (apprentice.type !== "apprentice" || !apprentice.profile_complete) {
-      return false
-    }
-
-    // 2. Skill Match: Apprentice must have all required skills
-    const apprenticeSkills = new Set(apprentice.skills?.map((s) => s.toLowerCase()) || [])
-    const hasAllRequiredSkills = Array.from(requiredSkills).every((skill) => apprenticeSkills.has(skill))
-    if (!hasAllRequiredSkills) {
-      return false
-    }
-
-    // 3. Location/Travel: Apprentice must be in the same city or willing to travel
-    const apprenticeCity = apprentice.city?.toLowerCase()
-    const willingToTravel = apprentice.willing_to_travel
-
-    if (jobLocation && apprenticeCity && jobLocation !== apprenticeCity && !willingToTravel) {
-      return false
-    }
-
-    // 4. Availability (simplified): Apprentice must have some availability that matches job days
-    // This is a very basic check. A more robust system would compare specific days/hours.
-    const jobWorkDays = new Set(job.work_days?.map((d) => d.toLowerCase()) || [])
-    const apprenticeAvailability = apprentice.availability?.toLowerCase()
-
-    if (jobWorkDays.size > 0 && apprenticeAvailability === "full-time") {
-      // If job specifies days and apprentice is full-time, assume a match for simplicity
-      // In a real app, you'd check if jobWorkDays overlap with apprentice's specific available days
-    } else if (jobWorkDays.size > 0 && apprenticeAvailability === "part-time" && jobWorkDays.size > 3) {
-      // Simple heuristic: part-time might not match a job requiring many days
-      return false
-    }
-
-    // 5. Experience Level (simplified): Job requirements might specify experience
-    // This would need a more detailed mapping (e.g., 'entry-level' vs 'basic-experience')
-    // For now, we'll assume if a job has specific requirements, the apprentice meets them.
-    // A more complex system would parse job.requirements and match against apprentice's bio/experience.
-
-    // 6. Transportation: If job requires transportation, apprentice must have it
-    if (job.requirements?.includes("Requires Transportation") && !apprentice.transportation) {
-      return false
-    }
-
-    // All checks passed
-    return true
-  })
+export interface MatchScore {
+  overall: number
+  skillMatch: number
+  availabilityMatch: number
+  locationMatch: number
+  experienceMatch: number
 }
 
-export function calculateMatchScore(job: JobPosting, apprentice: User): number {
+export const calculateMatchScore = (job: JobPosting, apprentice: User): number => {
   let score = 0
+  let factors = 0
 
-  // Skill Match (higher weight)
-  const requiredSkills = new Set(job.required_skills?.map((s) => s.toLowerCase()) || [])
-  const apprenticeSkills = new Set(apprentice.skills?.map((s) => s.toLowerCase()) || [])
-  const commonSkills = Array.from(requiredSkills).filter((skill) => apprenticeSkills.has(skill))
-  score += (commonSkills.length / requiredSkills.size) * 50 // Max 50 points for skills
-
-  // Location Match
-  const jobLocation = job.city?.toLowerCase()
-  const apprenticeCity = apprentice.city?.toLowerCase()
-  if (jobLocation && apprenticeCity && jobLocation === apprenticeCity) {
-    score += 20 // 20 points for same city
-  } else if (apprentice.willing_to_travel) {
-    score += 10 // 10 points for willing to travel
+  // Skill matching (40% weight)
+  if (job.requiredSkills && apprentice.skills) {
+    const matchingSkills = job.requiredSkills.filter((skill) =>
+      apprentice.skills!.some(
+        (apprenticeSkill) =>
+          apprenticeSkill.toLowerCase().includes(skill.toLowerCase()) ||
+          skill.toLowerCase().includes(apprenticeSkill.toLowerCase()),
+      ),
+    )
+    const skillScore = (matchingSkills.length / job.requiredSkills.length) * 40
+    score += skillScore
+    factors += 40
   }
 
-  // Availability Match (simplified)
-  // This is a placeholder. A real system would have complex availability matching.
-  if (job.work_days && job.work_days.length > 0 && apprentice.availability === "full-time") {
-    score += 15 // 15 points for full-time matching any work days
-  } else if (
-    job.work_days &&
-    job.work_days.length > 0 &&
-    apprentice.availability === "part-time" &&
-    job.work_days.length <= 3
-  ) {
-    score += 10 // 10 points for part-time matching fewer days
+  // Experience level matching (25% weight)
+  if (apprentice.experienceLevel) {
+    const experienceScore = getExperienceScore(apprentice.experienceLevel)
+    score += experienceScore * 25
+    factors += 25
   }
 
-  // Experience Level (simplified)
-  // This would need a more detailed mapping.
-  if (apprentice.experience_level === "journeyman") {
-    score += 10
-  } else if (apprentice.experience_level === "basic-experience" && job.requirements?.includes("Entry Level")) {
-    score += 5
+  // Availability matching (20% weight)
+  if (apprentice.availability) {
+    const availabilityScore = getAvailabilityScore(apprentice.availability, job.workDays)
+    score += availabilityScore * 20
+    factors += 20
   }
 
-  // Transportation
-  if (job.requirements?.includes("Requires Transportation") && apprentice.transportation) {
-    score += 5
+  // Location proximity (15% weight)
+  if (apprentice.city && apprentice.state) {
+    // For demo purposes, assume all are in CA and give partial score
+    const locationScore = 0.8 // 80% match for same state
+    score += locationScore * 15
+    factors += 15
   }
 
-  return Math.min(100, Math.round(score)) // Cap at 100
+  return factors > 0 ? Math.round((score / factors) * 100) : 0
+}
+
+const getExperienceScore = (experienceLevel: string): number => {
+  switch (experienceLevel.toLowerCase()) {
+    case "advanced":
+    case "expert":
+      return 1.0
+    case "intermediate":
+      return 0.8
+    case "basic experience":
+    case "some knowledge":
+      return 0.6
+    case "beginner":
+    case "entry level":
+      return 0.4
+    default:
+      return 0.5
+  }
+}
+
+const getAvailabilityScore = (availability: string, workDays: string[]): number => {
+  if (availability.toLowerCase().includes("full-time")) {
+    return 1.0
+  } else if (availability.toLowerCase().includes("part-time")) {
+    return 0.7
+  } else if (availability.toLowerCase().includes("weekend")) {
+    // Check if job requires weekends
+    const hasWeekends = workDays.some(
+      (day) => day.toLowerCase().includes("saturday") || day.toLowerCase().includes("sunday"),
+    )
+    return hasWeekends ? 0.9 : 0.3
+  }
+  return 0.5
+}
+
+export const findMatchingApprentices = (job: JobPosting, apprentices: User[]): User[] => {
+  return apprentices
+    .filter((apprentice) => apprentice.type === "apprentice")
+    .map((apprentice) => ({
+      ...apprentice,
+      matchScore: calculateMatchScore(job, apprentice),
+    }))
+    .filter((apprentice) => apprentice.matchScore > 30) // Only show matches above 30%
+    .sort((a, b) => b.matchScore - a.matchScore)
+}
+
+export const getRecommendedJobs = (apprentice: User, jobs: JobPosting[]): JobPosting[] => {
+  return jobs
+    .filter((job) => job.status === "active")
+    .map((job) => ({
+      ...job,
+      matchScore: calculateMatchScore(job, apprentice),
+    }))
+    .filter((job) => job.matchScore > 30)
+    .sort((a, b) => b.matchScore - a.matchScore)
 }
