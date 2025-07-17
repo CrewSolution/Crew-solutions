@@ -181,6 +181,21 @@ export async function updateUser(id: string, updateData: Partial<User>): Promise
   })
 }
 
+// --- legacy-compat saveUser (create or update) ------------------------------
+export async function saveUser(user: User & { password?: string }): Promise<User> {
+  if (user.id) {
+    // Update existing
+    const { id, ...rest } = user
+    return updateUser(id, rest)
+  }
+
+  // New user – password *must* be present
+  if (!user.password) throw new Error("Password is required to create a user")
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { password, ...rest } = user
+  return createUser({ ...rest, password })
+}
+
 export async function authenticateUser(email: string, password: string): Promise<User> {
   return fetchData<User>(`${API_BASE_URL}/auth/login`, {
     method: "POST",
@@ -297,6 +312,9 @@ export async function getReviews(revieweeId?: string, reviewerId?: string): Prom
   return fetchData<Review[]>(url)
 }
 
+// --- legacy-compat fetchReviews --------------------------------------------
+export const fetchReviews = getReviews
+
 export async function createReview(reviewData: Omit<Review, "id" | "date">): Promise<Review> {
   return fetchData<Review>(`${API_BASE_URL}/reviews`, {
     method: "POST",
@@ -330,6 +348,45 @@ export async function approveTimeEntry(id: string): Promise<TimeEntry> {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id, approved: true }),
+  })
+}
+
+// --- legacy-compat initializeSampleData ------------------------------------
+export async function initializeSampleData(): Promise<void> {
+  const users = await getUsers()
+  if (users.length > 0) return
+
+  // Create a demo shop
+  await createUser({
+    type: "shop",
+    email: "shop@example.com",
+    password: "password123",
+    businessName: "Bay Area Electric Co.",
+    ownerName: "John Smith",
+    phone: "(415) 555-0123",
+    address: "123 Main Street",
+    city: "San Francisco",
+    state: "CA",
+    zipCode: "94102",
+    licenseNumber: "C10-123456",
+  })
+
+  // Create a demo apprentice
+  await createUser({
+    type: "apprentice",
+    email: "apprentice@example.com",
+    password: "password123",
+    firstName: "Marcus",
+    lastName: "Chen",
+    phone: "(415) 555-0124",
+    address: "456 Oak Street",
+    city: "San Francisco",
+    state: "CA",
+    zipCode: "94103",
+    experienceLevel: "basic-experience",
+    availability: "full-time",
+    skills: ["Wiring Installation", "Safety Protocols", "Hand Tools"],
+    hoursCompleted: 1200,
   })
 }
 
