@@ -27,29 +27,22 @@ export default function LoginPage() {
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       })
 
-      const data = await response.json()
+      // Try to decode the body safely
+      const contentType = response.headers.get("content-type") || ""
+      const isJson = contentType.includes("application/json")
+      const data: any = isJson ? await response.json() : { error: await response.text() }
 
       if (response.ok) {
-        toast({
-          title: "Login successful",
-          description: "Welcome back!",
-        })
+        toast({ title: "Login successful", description: "Welcome back!" })
 
-        // Store user data in localStorage for demo purposes
+        // Persist the user locally for demo purposes
         localStorage.setItem("currentUser", JSON.stringify(data.user))
 
-        // Redirect based on user type
-        if (data.user.type === "shop") {
-          router.push("/dashboard/shop")
-        } else {
-          router.push("/dashboard/apprentice")
-        }
+        router.push(data.user.type === "shop" ? "/dashboard/shop" : "/dashboard/apprentice")
       } else {
         toast({
           title: "Login failed",
@@ -57,11 +50,11 @@ export default function LoginPage() {
           variant: "destructive",
         })
       }
-    } catch (error: any) {
-      console.error("Login error:", error)
+    } catch (err) {
+      console.error("Login error:", err)
       toast({
         title: "Login error",
-        description: "An error occurred during login",
+        description: "Could not reach the server. Please try again later.",
         variant: "destructive",
       })
     } finally {
