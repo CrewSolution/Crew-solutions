@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -21,8 +21,8 @@ export default function LoginPage() {
   const router = useRouter()
   const { toast } = useToast()
 
-  // Initialize sample data on component mount
-  useState(() => {
+  /* Seed demo users once per page load */
+  useEffect(() => {
     initializeSampleData()
   }, [])
 
