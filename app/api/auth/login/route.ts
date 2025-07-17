@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import { sql } from "@/lib/db"
-import bcrypt from "bcryptjs"
+import { authenticateUser } from "@/lib/storage" // Assuming this now interacts with your DB
+import { cookies } from "next/headers"
 
 export async function POST(request: Request) {
   try {
@@ -10,23 +10,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Email and password are required" }, { status: 400 })
     }
 
-    const users = await sql`SELECT * FROM users WHERE email = ${email}`
-    const user = users[0]
+    const user = await authenticateUser(email, password)
 
     if (!user) {
       return NextResponse.json({ message: "Invalid credentials" }, { status: 401 })
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password)
+    // Set a session cookie (simplified for demonstration)
+    cookies().set("session", JSON.stringify({ userId: user.id, userType: user.type }), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 7, // 1 week
+      path: "/",
+    })
 
-    if (!isPasswordValid) {
-      return NextResponse.json({ message: "Invalid credentials" }, { status: 401 })
-    }
-
-    // Remove sensitive data before sending
-    const { password: _, ...userWithoutPassword } = user
-
-    return NextResponse.json({ user: userWithoutPassword }, { status: 200 })
+    return NextResponse.json({ message: "Login successful", user: { id: user.id, type: user.type, email: user.email } })
   } catch (error) {
     console.error("Login error:", error)
     return NextResponse.json({ message: "Internal server error" }, { status: 500 })

@@ -1,94 +1,106 @@
 import { NextResponse } from "next/server"
 import { sql } from "@/lib/db"
+import { cookies } from "next/headers"
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     const { id } = params
-    const jobs = await sql`SELECT * FROM job_postings WHERE id = ${id}`
-    const job = jobs[0]
+    const { rows } = await sql.query("SELECT * FROM job_postings WHERE id = $1", [id])
 
-    if (!job) {
+    if (rows.length === 0) {
       return NextResponse.json({ message: "Job posting not found" }, { status: 404 })
     }
-
-    const result = {
-      id: job.id,
-      shopId: job.shop_id,
-      title: job.title,
-      description: job.description,
-      apprenticesNeeded: job.apprentices_needed,
-      expectedDuration: job.expected_duration,
-      daysNeeded: job.days_needed,
-      startDate: job.start_date.toISOString().split("T")[0],
-      hoursPerDay: job.hours_per_day,
-      workDays: job.work_days,
-      payRate: job.pay_rate,
-      requirements: job.requirements,
-      requiredSkills: job.required_skills,
-      priority: job.priority,
-      status: job.status,
-      applicants: job.applicants,
-      postedDate: job.posted_date.toISOString(),
-      totalCost: job.total_cost,
-      weeklyPayment: job.weekly_payment,
-    }
-
-    return NextResponse.json(result, { status: 200 })
+    return NextResponse.json(rows[0])
   } catch (error) {
-    console.error("Error fetching job posting by ID:", error)
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+    console.error("Error fetching job posting:", error)
+    return NextResponse.json({ message: "Error fetching job posting" }, { status: 500 })
   }
 }
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
-    const { id } = params
-    const updateData = await request.json()
+    const cookieStore = cookies()
+    const session = cookieStore.get("session")?.value
+    if (!session) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    }
+    const { userId, userType } = JSON.parse(session)
 
-    const dbUpdateData: Record<string, any> = {}
-    for (const key in updateData) {
-      if (Object.prototype.hasOwnProperty.call(updateData, key)) {
-        const dbKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-        dbUpdateData[dbKey] = updateData[key]
-      }
+    const { id } = params
+    const body = await request.json()
+    const { applicants, ...updateData } = body // Exclude applicants from direct update
+
+    // Fetch the existing job posting to verify ownership
+    const existingJob = await sql.query("SELECT shop_id FROM job_postings WHERE id = $1", [id])
+    if (existingJob.rows.length === 0) {
+      return NextResponse.json({ message: "Job posting not found" }, { status: 404 })
+    }
+    if (existingJob.rows[0].shop_id !== userId || userType !== "shop") {
+      return NextResponse.json({ message: "Forbidden: You can only update your own job postings" }, { status: 403 })
     }
 
-    const [updatedJob] = await sql`
+    const updateQueryParts: string[] = []
+    const updateValues: any[] = []
+    let paramIndex = 1
+
+    for (const key in updateData) {
+      updateQueryParts.push(`${key} = $${paramIndex++}`)
+      updateValues.push(updateData[key])
+    }
+
+    if (updateQueryParts.length === 0) {
+      return NextResponse.json({ message: "No update data provided" }, { status: 400 })
+    }
+
+    updateValues.push(id) // Add ID for WHERE clause
+
+    const query = `
       UPDATE job_postings
-      SET ${sql(dbUpdateData, Object.keys(dbUpdateData))}
-      WHERE id = ${id}
+      SET ${updateQueryParts.join(", ")}
+      WHERE id = $${paramIndex}
       RETURNING *
     `
 
-    if (!updatedJob) {
-      return NextResponse.json({ message: "Job posting not found" }, { status: 404 })
-    }
+    const { rows } = await sql.query(query, updateValues)
 
-    const result = {
-      id: updatedJob.id,
-      shopId: updatedJob.shop_id,
-      title: updatedJob.title,
-      description: updatedJob.description,
-      apprenticesNeeded: updatedJob.apprentices_needed,
-      expectedDuration: updatedJob.expected_duration,
-      daysNeeded: updatedJob.days_needed,
-      startDate: updatedJob.start_date.toISOString().split("T")[0],
-      hoursPerDay: updatedJob.hours_per_day,
-      workDays: updatedJob.work_days,
-      payRate: updatedJob.pay_rate,
-      requirements: updatedJob.requirements,
-      requiredSkills: updatedJob.required_skills,
-      priority: updatedJob.priority,
-      status: updatedJob.status,
-      applicants: updatedJob.applicants,
-      postedDate: updatedJob.posted_date.toISOString(),
-      totalCost: updatedJob.total_cost,
-      weeklyPayment: updatedJob.weekly_payment,
+    if (rows.length === 0) {
+      return NextResponse.json({ message: "Job posting not found or no changes made" }, { status: 404 })
     }
-
-    return NextResponse.json(result, { status: 200 })
+    return NextResponse.json(rows[0])
   } catch (error) {
     console.error("Error updating job posting:", error)
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  try {
+    const cookieStore = cookies()
+    const session = cookieStore.get("session")?.value
+    if (!session) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    }
+    const { userId, userType } = JSON.parse(session)
+
+    const { id } = params
+
+    // Fetch the existing job posting to verify ownership
+    const existingJob = await sql.query("SELECT shop_id FROM job_postings WHERE id = $1", [id])
+    if (existingJob.rows.length === 0) {
+      return NextResponse.json({ message: "Job posting not found" }, { status: 404 })
+    }
+    if (existingJob.rows[0].shop_id !== userId || userType !== "shop") {
+      return NextResponse.json({ message: "Forbidden: You can only delete your own job postings" }, { status: 403 })
+    }
+
+    const { rowCount } = await sql.query("DELETE FROM job_postings WHERE id = $1", [id])
+
+    if (rowCount === 0) {
+      return NextResponse.json({ message: "Job posting not found" }, { status: 404 })
+    }
+    return NextResponse.json({ message: "Job posting deleted successfully" })
+  } catch (error) {
+    console.error("Error deleting job posting:", error)
     return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
 }

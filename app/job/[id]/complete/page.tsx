@@ -1,250 +1,206 @@
 "use client"
 
+import { Separator } from "@/components/ui/separator"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
-import { useToast } from "@/hooks/use-toast"
-import {
-  getCurrentUser,
-  getActiveJobById,
-  updateActiveJob,
-  createTimeEntry,
-  getTimeEntries,
-  type User,
-  type ActiveJob,
-  type TimeEntry,
-} from "@/lib/storage"
-import { format } from "date-fns"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Zap } from "lucide-react"
-import Link from "next/link"
+import { useToast } from "@/hooks/use-toast"
+import { getActiveJob, updateActiveJob, getTimeEntries, updateTimeEntry } from "@/lib/storage"
+import type { ActiveJob, TimeEntry } from "@/lib/types"
+import { format } from "date-fns"
+import { Loader2 } from "lucide-react"
 
-export default function JobCompletePage({ params }: { params: { id: string } }) {
+export default function CompleteJobPage({ params }: { params: { id: string } }) {
   const { id: jobId } = params
   const router = useRouter()
   const { toast } = useToast()
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [job, setJob] = useState<ActiveJob | null>(null)
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
-  const [hoursToday, setHoursToday] = useState<number>(0)
-  const [isSubmittingHours, setIsSubmittingHours] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    const user = getCurrentUser()
-    if (!user) {
-      router.push("/login")
-      return
-    }
-    setCurrentUser(user)
-    fetchJobData(user.id, jobId)
-  }, [router, jobId])
-
-  const fetchJobData = async (userId: string, currentJobId: string) => {
-    setIsLoading(true)
-    try {
-      const fetchedJob = await getActiveJobById(currentJobId)
-      if (fetchedJob.apprenticeId !== userId && fetchedJob.shopId !== userId) {
+    const fetchJobData = async () => {
+      try {
+        const fetchedJob = await getActiveJob(jobId)
+        setJob(fetchedJob)
+        const fetchedTimeEntries = await getTimeEntries({ jobId: fetchedJob.id })
+        setTimeEntries(fetchedTimeEntries)
+      } catch (error) {
+        console.error("Failed to fetch job data:", error)
         toast({
-          title: "Access Denied",
-          description: "You do not have permission to view this job.",
+          title: "Error",
+          description: "Failed to load job details.",
           variant: "destructive",
         })
-        router.push(currentUser?.type === "shop" ? "/dashboard/shop" : "/dashboard/apprentice")
-        return
+        router.push("/dashboard/shop") // Redirect if job not found or error
+      } finally {
+        setLoading(false)
       }
-      setJob(fetchedJob)
+    }
+    fetchJobData()
+  }, [jobId, router, toast])
 
-      const entries = await getTimeEntries(currentJobId)
-      setTimeEntries(entries)
+  const handleApproveHours = async (entryId: string, approved: boolean) => {
+    setSubmitting(true)
+    try {
+      await updateTimeEntry(entryId, { approved })
+      toast({
+        title: "Hours Updated",
+        description: `Time entry ${approved ? "approved" : "unapproved"} successfully.`,
+      })
+      // Refresh time entries
+      const updatedTimeEntries = await getTimeEntries({ jobId: jobId })
+      setTimeEntries(updatedTimeEntries)
     } catch (error: any) {
       toast({
-        title: "Error loading job",
-        description: error.message || "Failed to fetch job details.",
+        title: "Error Updating Hours",
+        description: error.message || "An error occurred while updating hours.",
         variant: "destructive",
       })
-      router.push(currentUser?.type === "shop" ? "/dashboard/shop" : "/dashboard/apprentice")
     } finally {
-      setIsLoading(false)
+      setSubmitting(false)
     }
   }
 
-  const handleHoursSubmit = async () => {
-    if (!currentUser || !job || hoursToday <= 0) {
+  const handleCompleteJob = async () => {
+    if (!job) return
+
+    // Check if all time entries are approved
+    const allApproved = timeEntries.every((entry) => entry.approved)
+    if (!allApproved) {
       toast({
-        title: "Invalid input",
-        description: "Please enter valid hours.",
+        title: "Cannot Complete Job",
+        description: "All time entries must be approved before completing the job.",
         variant: "destructive",
       })
       return
     }
 
-    setIsSubmittingHours(true)
+    setSubmitting(true)
     try {
-      const newEntry: Omit<TimeEntry, "id" | "submittedAt" | "approvedAt"> = {
-        jobId: job.id,
-        apprenticeId: currentUser.id,
-        date: format(new Date(), "yyyy-MM-dd"),
-        hours: hoursToday,
-        approved: false,
-      }
-      await createTimeEntry(newEntry)
-
-      // Update job's pending hours
-      const updatedPendingHours = (job.pendingHours || 0) + hoursToday
-      const updatedTotalHours = (job.totalHours || 0) + hoursToday
-      await updateActiveJob(job.id, {
-        pendingHours: updatedPendingHours,
-        totalHours: updatedTotalHours,
+      await updateActiveJob(job.id, { status: "completed", end_date: new Date().toISOString().split("T")[0] })
+      toast({
+        title: "Job Completed!",
+        description: `Job "${job.title}" has been marked as completed.`,
       })
-
-      toast({ title: "Hours submitted successfully!" })
-      setHoursToday(0)
-      fetchJobData(currentUser.id, jobId) // Re-fetch to update UI
+      router.push("/dashboard/shop")
     } catch (error: any) {
       toast({
-        title: "Error submitting hours",
-        description: error.message || "Failed to submit hours.",
+        title: "Error Completing Job",
+        description: error.message || "An error occurred while completing the job.",
         variant: "destructive",
       })
     } finally {
-      setIsSubmittingHours(false)
+      setSubmitting(false)
     }
   }
 
-  const handleMarkComplete = async () => {
-    if (!currentUser || !job) return
-
-    try {
-      await updateActiveJob(job.id, { status: "completed", endDate: new Date().toISOString().split("T")[0] })
-      toast({ title: "Job marked as complete!", description: "You can now review the shop/apprentice." })
-      router.push(`/job/${job.id}/review`)
-    } catch (error: any) {
-      toast({
-        title: "Error marking job complete",
-        description: error.message || "Failed to mark job as complete.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <p>Loading job details...</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-crew-accent" />
       </div>
     )
   }
 
-  if (!job || !currentUser) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <p>Job not found or access denied.</p>
-      </div>
-    )
+  if (!job) {
+    return <p className="p-4">Job not found.</p>
   }
 
-  const isApprentice = currentUser.type === "apprentice"
-  const progress = (job.daysWorked / job.totalDays) * 100 || 0
+  const totalHoursWorked = timeEntries.reduce((sum, entry) => sum + entry.hours, 0)
+  const totalPay = totalHoursWorked * Number.parseFloat(job.pay_rate.replace(/[^0-9.]/g, "")) // Simple extraction
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <header className="px-4 lg:px-6 h-14 flex items-center border-b">
-        <Link href="/" className="flex items-center justify-center gap-2">
-          <Zap className="h-6 w-6 text-yellow-500" />
-          <span className="text-lg font-bold">Crew Solutions</span>
-        </Link>
-        <nav className="ml-auto flex gap-4 sm:gap-6">
-          <Button variant="ghost" onClick={() => router.back()}>
-            Back to Dashboard
-          </Button>
-        </nav>
+    <div className="flex min-h-screen w-full flex-col bg-gray-100 dark:bg-gray-900">
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-white px-4 dark:bg-gray-800">
+        <h1 className="text-xl font-semibold">Complete Job: {job.title}</h1>
+        <Button variant="outline" onClick={() => router.back()}>
+          Back to Dashboard
+        </Button>
       </header>
-      <main className="flex-1 p-4 md:p-6">
-        <div className="max-w-4xl mx-auto grid gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>{job.title}</CardTitle>
-              <p className="text-sm text-gray-500">
-                {isApprentice ? `Shop: ${job.shopName}` : `Apprentice: ${job.apprenticeName}`}
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <h3 className="font-semibold">Job Progress</h3>
-                <Progress value={progress} className="w-full mt-2" />
-                <p className="text-sm text-gray-500 mt-1">
-                  {job.daysWorked} of {job.totalDays} days completed ({progress.toFixed(0)}%)
-                </p>
-                <p className="text-sm text-gray-500">Total Hours Logged: {job.totalHours}</p>
-                <p className="text-sm text-gray-500">Pending Hours: {job.pendingHours}</p>
-              </div>
+      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-10">
+        <Card>
+          <CardHeader>
+            <CardTitle>Job Details</CardTitle>
+            <CardDescription>Overview of the job and apprentice's progress.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="grid grid-cols-2 gap-2">
+              <Label>Job Title:</Label>
+              <span>{job.title}</span>
+              <Label>Apprentice:</Label>
+              <span>{job.apprentice_name}</span>
+              <Label>Start Date:</Label>
+              <span>{format(new Date(job.start_date), "PPP")}</span>
+              <Label>Pay Rate:</Label>
+              <span>{job.pay_rate}</span>
+              <Label>Total Days:</Label>
+              <span>{job.total_days}</span>
+              <Label>Hours Per Day:</Label>
+              <span>{job.hours_per_day}</span>
+              <Label>Current Status:</Label>
+              <span>{job.status}</span>
+            </div>
+            <Separator />
+            <div className="grid grid-cols-2 gap-2 font-bold">
+              <Label>Total Hours Logged:</Label>
+              <span>{totalHoursWorked}</span>
+              <Label>Estimated Total Pay:</Label>
+              <span>${totalPay.toFixed(2)}</span>
+            </div>
+          </CardContent>
+        </Card>
 
-              {isApprentice && job.canSubmitHours && (
-                <div className="space-y-2">
-                  <Label htmlFor="hoursToday">Log Hours for Today</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="hoursToday"
-                      type="number"
-                      value={hoursToday}
-                      onChange={(e) => setHoursToday(Number.parseFloat(e.target.value))}
-                      min="0"
-                      max="12"
-                      step="0.5"
-                      placeholder="e.g., 8"
-                    />
-                    <Button onClick={handleHoursSubmit} disabled={isSubmittingHours || hoursToday <= 0}>
-                      {isSubmittingHours ? "Submitting..." : "Submit Hours"}
-                    </Button>
+        <Card>
+          <CardHeader>
+            <CardTitle>Time Entries</CardTitle>
+            <CardDescription>Review and approve hours submitted by the apprentice.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {timeEntries.length === 0 ? (
+              <p>No time entries submitted yet.</p>
+            ) : (
+              <div className="grid gap-4">
+                {timeEntries.map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between rounded-md border p-3">
+                    <div>
+                      <p className="font-medium">Date: {format(new Date(entry.date), "PPP")}</p>
+                      <p className="text-sm text-gray-500">Hours: {entry.hours}</p>
+                      <p className="text-sm text-gray-500">Status: {entry.approved ? "Approved" : "Pending"}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      {!entry.approved ? (
+                        <Button size="sm" onClick={() => handleApproveHours(entry.id, true)} disabled={submitting}>
+                          Approve
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleApproveHours(entry.id, false)}
+                          disabled={submitting}
+                        >
+                          Unapprove
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-
-              <div>
-                <h3 className="font-semibold mb-2">Time Entries</h3>
-                {timeEntries.length === 0 ? (
-                  <p className="text-gray-500 text-sm">No time entries yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {timeEntries.map((entry) => (
-                      <div key={entry.id} className="flex justify-between items-center border-b pb-1 text-sm">
-                        <span>
-                          {format(new Date(entry.date), "MMM dd, yyyy")} - {entry.hours} hours
-                        </span>
-                        <span className={`font-medium ${entry.approved ? "text-green-600" : "text-yellow-600"}`}>
-                          {entry.approved ? "Approved" : "Pending"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                ))}
               </div>
+            )}
+          </CardContent>
+        </Card>
 
-              {job.status === "in-progress" && (
-                <Button onClick={handleMarkComplete} className="w-full mt-4">
-                  Mark Job as Complete
-                </Button>
-              )}
-
-              {job.status === "completed" && (
-                <div className="mt-4 text-center text-lg font-semibold text-green-600">
-                  Job is completed! Please proceed to review.
-                  <Button onClick={() => router.push(`/job/${job.id}/review`)} className="w-full mt-2">
-                    Go to Review
-                  </Button>
-                </div>
-              )}
-
-              {job.status === "reviewed" && (
-                <div className="mt-4 text-center text-lg font-semibold text-blue-600">Job has been reviewed.</div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        <Button onClick={handleCompleteJob} disabled={submitting || !timeEntries.every((entry) => entry.approved)}>
+          {submitting ? "Completing Job..." : "Mark Job as Completed"}
+        </Button>
+        {!timeEntries.every((entry) => entry.approved) && (
+          <p className="text-sm text-red-500 mt-2">All time entries must be approved to complete the job.</p>
+        )}
       </main>
     </div>
   )

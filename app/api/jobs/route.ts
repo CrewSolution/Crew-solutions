@@ -1,27 +1,7 @@
 import { NextResponse } from "next/server"
 import { sql } from "@/lib/db"
-
-type JobPostingRow = {
-  id: string
-  shop_id: string
-  title: string
-  description: string
-  apprentices_needed: number
-  expected_duration: string
-  days_needed: number
-  start_date: Date
-  hours_per_day: number
-  work_days: string[]
-  pay_rate: string
-  requirements: string[]
-  required_skills: string[]
-  priority: "high" | "medium" | "low"
-  status: "active" | "filled" | "paused"
-  applicants: number
-  posted_date: Date
-  total_cost?: number
-  weekly_payment?: number
-}
+import { v4 as uuidv4 } from "uuid"
+import { cookies } from "next/headers"
 
 export async function GET(request: Request) {
   try {
@@ -29,107 +9,105 @@ export async function GET(request: Request) {
     const shopId = searchParams.get("shopId")
     const status = searchParams.get("status")
 
-    const where: string[] = []
-    const params: any[] = []
+    let query = "SELECT * FROM job_postings"
+    const params: string[] = []
+    const conditions: string[] = []
+    let paramIndex = 1
 
     if (shopId) {
+      conditions.push(`shop_id = $${paramIndex++}`)
       params.push(shopId)
-      where.push(`shop_id = $${params.length}`)
     }
     if (status) {
+      conditions.push(`status = $${paramIndex++}`)
       params.push(status)
-      where.push(`status = $${params.length}`)
     }
 
-    const query = "SELECT * FROM job_postings" + (where.length ? ` WHERE ${where.join(" AND ")}` : "")
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(" AND ")}`
+    }
 
-    const jobs: JobPostingRow[] = await sql(query, params)
-
-    const result = jobs.map((j) => ({
-      id: j.id,
-      shopId: j.shop_id,
-      title: j.title,
-      description: j.description,
-      apprenticesNeeded: j.apprentices_needed,
-      expectedDuration: j.expected_duration,
-      daysNeeded: j.days_needed,
-      startDate: j.start_date.toISOString().split("T")[0],
-      hoursPerDay: j.hours_per_day,
-      workDays: j.work_days,
-      payRate: j.pay_rate,
-      requirements: j.requirements,
-      requiredSkills: j.required_skills,
-      priority: j.priority,
-      status: j.status,
-      applicants: j.applicants,
-      postedDate: j.posted_date.toISOString(),
-      totalCost: j.total_cost,
-      weeklyPayment: j.weekly_payment,
-    }))
-
-    return NextResponse.json(result, { status: 200 })
+    const { rows } = await sql.query(query, params)
+    return NextResponse.json(rows)
   } catch (error) {
     console.error("Error fetching job postings:", error)
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ message: "Error fetching job postings" }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const jobData = await request.json()
+    const cookieStore = cookies()
+    const session = cookieStore.get("session")?.value
+    if (!session) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    }
+    const { userId, userType } = JSON.parse(session)
 
-    const dbData: Record<string, any> = {
-      id: `job-${Date.now()}`, // Generate a simple ID
-      shop_id: jobData.shopId,
-      title: jobData.title,
-      description: jobData.description,
-      apprentices_needed: jobData.apprenticesNeeded,
-      expected_duration: jobData.expectedDuration,
-      days_needed: jobData.daysNeeded,
-      start_date: jobData.startDate,
-      hours_per_day: jobData.hoursPerDay,
-      work_days: jobData.workDays,
-      pay_rate: jobData.payRate,
-      requirements: jobData.requirements,
-      required_skills: jobData.requiredSkills,
-      priority: jobData.priority,
-      status: jobData.status || "active",
-      applicants: jobData.applicants || 0,
-      posted_date: new Date().toISOString(),
-      total_cost: jobData.totalCost,
-      weekly_payment: jobData.weeklyPayment,
+    if (userType !== "shop") {
+      return NextResponse.json({ message: "Only shops can post jobs" }, { status: 403 })
     }
 
-    const [newJob] = await sql`
-      INSERT INTO job_postings ${sql(dbData, Object.keys(dbData))}
+    const body = await request.json()
+    const {
+      title,
+      description,
+      apprentices_needed,
+      expected_duration,
+      days_needed,
+      start_date,
+      hours_per_day,
+      work_days,
+      pay_rate,
+      requirements,
+      required_skills,
+      priority,
+      total_cost,
+      weekly_payment,
+    } = body
+
+    if (!title || !description || !apprentices_needed || !start_date || !pay_rate || !days_needed || !hours_per_day) {
+      return NextResponse.json({ message: "Missing required job posting fields" }, { status: 400 })
+    }
+
+    const id = uuidv4()
+    const posted_date = new Date().toISOString().split("T")[0] // Current date
+
+    const query = `
+      INSERT INTO job_postings (
+        id, shop_id, title, description, apprentices_needed, expected_duration,
+        days_needed, start_date, hours_per_day, work_days, pay_rate,
+        requirements, required_skills, priority, status, applicants, posted_date,
+        total_cost, weekly_payment
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING *
     `
+    const values = [
+      id,
+      userId,
+      title,
+      description,
+      apprentices_needed,
+      expected_duration,
+      days_needed,
+      start_date,
+      hours_per_day,
+      work_days || [],
+      pay_rate,
+      requirements || [],
+      required_skills || [],
+      priority || "medium",
+      "active",
+      0,
+      posted_date,
+      total_cost,
+      weekly_payment,
+    ]
 
-    const result = {
-      id: newJob.id,
-      shopId: newJob.shop_id,
-      title: newJob.title,
-      description: newJob.description,
-      apprenticesNeeded: newJob.apprentices_needed,
-      expectedDuration: newJob.expected_duration,
-      daysNeeded: newJob.days_needed,
-      startDate: newJob.start_date.toISOString().split("T")[0],
-      hoursPerDay: newJob.hours_per_day,
-      workDays: newJob.work_days,
-      payRate: newJob.pay_rate,
-      requirements: newJob.requirements,
-      requiredSkills: newJob.required_skills,
-      priority: newJob.priority,
-      status: newJob.status,
-      applicants: newJob.applicants,
-      postedDate: newJob.posted_date.toISOString(),
-      totalCost: newJob.total_cost,
-      weeklyPayment: newJob.weekly_payment,
-    }
-
-    return NextResponse.json(result, { status: 201 })
+    const { rows } = await sql.query(query, values)
+    return NextResponse.json(rows[0], { status: 201 })
   } catch (error) {
     console.error("Error creating job posting:", error)
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ message: "Error creating job posting" }, { status: 500 })
   }
 }

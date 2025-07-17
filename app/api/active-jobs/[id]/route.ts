@@ -1,92 +1,120 @@
 import { NextResponse } from "next/server"
 import { sql } from "@/lib/db"
+import { cookies } from "next/headers"
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     const { id } = params
-    const jobs = await sql`SELECT * FROM active_jobs WHERE id = ${id}`
-    const job = jobs[0]
+    const { rows } = await sql.query("SELECT * FROM active_jobs WHERE id = $1", [id])
 
-    if (!job) {
+    if (rows.length === 0) {
       return NextResponse.json({ message: "Active job not found" }, { status: 404 })
     }
-
-    const result = {
-      id: job.id,
-      jobPostingId: job.job_posting_id,
-      shopId: job.shop_id,
-      apprenticeId: job.apprentice_id,
-      title: job.title,
-      shopName: job.shop_name,
-      apprenticeName: job.apprentice_name,
-      startDate: job.start_date.toISOString().split("T")[0],
-      endDate: job.end_date?.toISOString().split("T")[0],
-      daysWorked: job.days_worked,
-      totalDays: job.total_days,
-      hoursPerDay: job.hours_per_day,
-      payRate: job.pay_rate,
-      status: job.status,
-      totalHours: job.total_hours,
-      pendingHours: job.pending_hours,
-      canComplete: job.can_complete,
-      canSubmitHours: job.can_submit_hours,
-    }
-
-    return NextResponse.json(result, { status: 200 })
+    return NextResponse.json(rows[0])
   } catch (error) {
-    console.error("Error fetching active job by ID:", error)
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+    console.error("Error fetching active job:", error)
+    return NextResponse.json({ message: "Error fetching active job" }, { status: 500 })
   }
 }
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
-    const { id } = params
-    const updateData = await request.json()
-
-    const dbUpdateData: Record<string, any> = {}
-    for (const key in updateData) {
-      if (Object.prototype.hasOwnProperty.call(updateData, key)) {
-        const dbKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-        dbUpdateData[dbKey] = updateData[key]
-      }
+    const cookieStore = cookies()
+    const session = cookieStore.get("session")?.value
+    if (!session) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
     }
+    const { userId, userType } = JSON.parse(session)
 
-    const [updatedJob] = await sql`
-      UPDATE active_jobs
-      SET ${sql(dbUpdateData, Object.keys(dbUpdateData))}
-      WHERE id = ${id}
-      RETURNING *
-    `
+    const { id } = params
+    const body = await request.json()
+    const { ...updateData } = body
 
-    if (!updatedJob) {
+    // Fetch the existing active job to verify ownership/permissions
+    const existingJob = await sql.query("SELECT shop_id, apprentice_id FROM active_jobs WHERE id = $1", [id])
+    if (existingJob.rows.length === 0) {
       return NextResponse.json({ message: "Active job not found" }, { status: 404 })
     }
 
-    const result = {
-      id: updatedJob.id,
-      jobPostingId: updatedJob.job_posting_id,
-      shopId: updatedJob.shop_id,
-      apprenticeId: updatedJob.apprentice_id,
-      title: updatedJob.title,
-      shopName: updatedJob.shop_name,
-      apprenticeName: updatedJob.apprentice_name,
-      startDate: updatedJob.start_date.toISOString().split("T")[0],
-      endDate: updatedJob.end_date?.toISOString().split("T")[0],
-      daysWorked: updatedJob.days_worked,
-      totalDays: updatedJob.total_days,
-      hoursPerDay: updatedJob.hours_per_day,
-      payRate: updatedJob.pay_rate,
-      status: updatedJob.status,
-      totalHours: updatedJob.total_hours,
-      pendingHours: updatedJob.pending_hours,
-      canComplete: updatedJob.can_complete,
-      canSubmitHours: updatedJob.can_submit_hours,
+    const job = existingJob.rows[0]
+
+    // Only the shop or apprentice involved in the job can update it
+    if (userType === "shop" && userId !== job.shop_id) {
+      return NextResponse.json({ message: "Forbidden: You can only update your own active jobs" }, { status: 403 })
+    }
+    if (userType === "apprentice" && userId !== job.apprentice_id) {
+      return NextResponse.json({ message: "Forbidden: You can only update your own active jobs" }, { status: 403 })
     }
 
-    return NextResponse.json(result, { status: 200 })
+    const updateQueryParts: string[] = []
+    const updateValues: any[] = []
+    let paramIndex = 1
+
+    for (const key in updateData) {
+      updateQueryParts.push(`${key} = $${paramIndex++}`)
+      updateValues.push(updateData[key])
+    }
+
+    if (updateQueryParts.length === 0) {
+      return NextResponse.json({ message: "No update data provided" }, { status: 400 })
+    }
+
+    updateValues.push(id) // Add ID for WHERE clause
+
+    const query = `
+      UPDATE active_jobs
+      SET ${updateQueryParts.join(", ")}
+      WHERE id = $${paramIndex}
+      RETURNING *
+    `
+
+    const { rows } = await sql.query(query, updateValues)
+
+    if (rows.length === 0) {
+      return NextResponse.json({ message: "Active job not found or no changes made" }, { status: 404 })
+    }
+    return NextResponse.json(rows[0])
   } catch (error) {
     console.error("Error updating active job:", error)
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  try {
+    const cookieStore = cookies()
+    const session = cookieStore.get("session")?.value
+    if (!session) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    }
+    const { userId, userType } = JSON.parse(session)
+
+    const { id } = params
+
+    // Fetch the existing active job to verify ownership/permissions
+    const existingJob = await sql.query("SELECT shop_id, apprentice_id FROM active_jobs WHERE id = $1", [id])
+    if (existingJob.rows.length === 0) {
+      return NextResponse.json({ message: "Active job not found" }, { status: 404 })
+    }
+
+    const job = existingJob.rows[0]
+
+    // Only the shop or apprentice involved in the job can delete it
+    if (userType === "shop" && userId !== job.shop_id) {
+      return NextResponse.json({ message: "Forbidden: You can only delete your own active jobs" }, { status: 403 })
+    }
+    if (userType === "apprentice" && userId !== job.apprentice_id) {
+      return NextResponse.json({ message: "Forbidden: You can only delete your own active jobs" }, { status: 403 })
+    }
+
+    const { rowCount } = await sql.query("DELETE FROM active_jobs WHERE id = $1", [id])
+
+    if (rowCount === 0) {
+      return NextResponse.json({ message: "Active job not found" }, { status: 404 })
+    }
+    return NextResponse.json({ message: "Active job deleted successfully" })
+  } catch (error) {
+    console.error("Error deleting active job:", error)
     return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
 }

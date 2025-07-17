@@ -61,10 +61,7 @@ export default function ShopDashboardLoading() {
 
         {/* Loader component added */}
         <div className="fixed top-0 left-0 right-0 bottom-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 z-50">
-          <div className="flex flex-col items-center space-y-4">
-            <Loader2 className="h-12 w-12 animate-spin text-yellow-500" />
-            <p className="text-gray-600 dark:text-gray-400">Loading dashboard...</p>
-          </div>
+          <Loader2 className="h-8 w-8 animate-spin text-crew-accent" />
         </div>
       </main>
     </div>

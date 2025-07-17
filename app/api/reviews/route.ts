@@ -1,103 +1,109 @@
 import { NextResponse } from "next/server"
 import { sql } from "@/lib/db"
-
-type ReviewRow = {
-  id: string
-  job_id: string
-  reviewer_id: string
-  reviewee_id: string
-  reviewer_type: "shop" | "apprentice"
-  rating: number
-  comment: string
-  ratings?: Record<string, number> // JSONB type in DB
-  skills_shown?: string[]
-  job_title: string
-  date: Date
-}
+import { v4 as uuidv4 } from "uuid"
+import { cookies } from "next/headers"
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const revieweeId = searchParams.get("revieweeId")
     const reviewerId = searchParams.get("reviewerId")
+    const revieweeId = searchParams.get("revieweeId")
+    const jobId = searchParams.get("jobId")
 
-    const where: string[] = []
-    const params: any[] = []
+    let query = "SELECT * FROM reviews"
+    const params: string[] = []
+    const conditions: string[] = []
+    let paramIndex = 1
 
-    if (revieweeId) {
-      params.push(revieweeId)
-      where.push(`reviewee_id = $${params.length}`)
-    }
     if (reviewerId) {
+      conditions.push(`reviewer_id = $${paramIndex++}`)
       params.push(reviewerId)
-      where.push(`reviewer_id = $${params.length}`)
+    }
+    if (revieweeId) {
+      conditions.push(`reviewee_id = $${paramIndex++}`)
+      params.push(revieweeId)
+    }
+    if (jobId) {
+      conditions.push(`job_id = $${paramIndex++}`)
+      params.push(jobId)
     }
 
-    const query = "SELECT * FROM reviews" + (where.length ? ` WHERE ${where.join(" AND ")}` : "")
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(" AND ")}`
+    }
 
-    const reviews: ReviewRow[] = await sql(query, params)
-
-    const result = reviews.map((r) => ({
-      id: r.id,
-      jobId: r.job_id,
-      reviewerId: r.reviewer_id,
-      revieweeId: r.reviewee_id,
-      reviewerType: r.reviewer_type,
-      rating: r.rating,
-      comment: r.comment,
-      ratings: r.ratings,
-      skillsShown: r.skills_shown,
-      jobTitle: r.job_title,
-      date: r.date.toISOString(),
-    }))
-
-    return NextResponse.json(result, { status: 200 })
+    const { rows } = await sql.query(query, params)
+    return NextResponse.json(rows)
   } catch (error) {
     console.error("Error fetching reviews:", error)
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ message: "Error fetching reviews" }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const reviewData = await request.json()
+    const cookieStore = cookies()
+    const session = cookieStore.get("session")?.value
+    if (!session) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    }
+    const { userId, userType } = JSON.parse(session)
 
-    const dbData: Record<string, any> = {
-      id: `review-${Date.now()}`,
-      job_id: reviewData.jobId,
-      reviewer_id: reviewData.reviewerId,
-      reviewee_id: reviewData.revieweeId,
-      reviewer_type: reviewData.reviewerType,
-      rating: reviewData.rating,
-      comment: reviewData.comment,
-      ratings: reviewData.ratings, // JSONB will handle this
-      skills_shown: reviewData.skillsShown,
-      job_title: reviewData.jobTitle,
-      date: new Date().toISOString(),
+    const body = await request.json()
+    const {
+      job_id,
+      reviewee_id,
+      rating,
+      comment,
+      timeliness_rating,
+      work_ethic_rating,
+      material_knowledge_rating,
+      profile_accuracy_rating,
+      skills_shown,
+      job_title,
+    } = body
+
+    if (!job_id || !reviewee_id || !rating || !job_title) {
+      return NextResponse.json({ message: "Missing required review fields" }, { status: 400 })
     }
 
-    const [newReview] = await sql`
-      INSERT INTO reviews ${sql(dbData, Object.keys(dbData))}
+    // Ensure the reviewer is the current logged-in user
+    if (userId !== body.reviewer_id) {
+      return NextResponse.json({ message: "Forbidden: You can only create reviews as yourself" }, { status: 403 })
+    }
+
+    const id = uuidv4()
+    const date = new Date().toISOString()
+
+    const query = `
+      INSERT INTO reviews (
+        id, job_id, reviewer_id, reviewee_id, reviewer_type, rating, comment,
+        timeliness_rating, work_ethic_rating, material_knowledge_rating,
+        profile_accuracy_rating, skills_shown, job_title, date
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *
     `
+    const values = [
+      id,
+      job_id,
+      userId,
+      reviewee_id,
+      userType,
+      rating,
+      comment,
+      timeliness_rating,
+      work_ethic_rating,
+      material_knowledge_rating,
+      profile_accuracy_rating,
+      skills_shown || [],
+      job_title,
+      date,
+    ]
 
-    const result = {
-      id: newReview.id,
-      jobId: newReview.job_id,
-      reviewerId: newReview.reviewer_id,
-      revieweeId: newReview.reviewee_id,
-      reviewerType: newReview.reviewer_type,
-      rating: newReview.rating,
-      comment: newReview.comment,
-      ratings: newReview.ratings,
-      skillsShown: newReview.skills_shown,
-      jobTitle: newReview.job_title,
-      date: newReview.date.toISOString(),
-    }
-
-    return NextResponse.json(result, { status: 201 })
+    const { rows } = await sql.query(query, values)
+    return NextResponse.json(rows[0], { status: 201 })
   } catch (error) {
     console.error("Error creating review:", error)
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ message: "Error creating review" }, { status: 500 })
   }
 }

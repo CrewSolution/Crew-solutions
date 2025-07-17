@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,507 +15,665 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import {
   getCurrentUser,
-  getJobPostings,
+  logoutUser,
   createJobPosting,
+  getJobPostings,
   getActiveJobs,
-  createReview,
-  updateActiveJob,
-  type User,
-  type JobPosting,
-  type ActiveJob,
-  type Review,
+  getJobInvitations,
+  getUsers,
+  deleteJobPosting,
+  createJobInvitation,
 } from "@/lib/storage"
-import { StarIcon } from "lucide-react" // Assuming these are available or need to be added
-import { Zap } from "lucide-react" // Importing Zap component
+import type { User, JobPosting, ActiveJob, JobInvitation } from "@/lib/types"
+import { format } from "date-fns"
+import { CalendarIcon, Send, Trash2 } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { cn } from "@/lib/utils"
+import { Progress } from "@/components/ui/progress"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { findMatchingApprentices, calculateMatchScore } from "@/lib/matching"
+import { BriefcaseIcon, CheckCircleIcon } from "lucide-react" // Importing missing icons
 
 export default function ShopDashboard() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [jobPostings, setJobPostings] = useState<JobPosting[]>([])
-  const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([])
-  const [newJobForm, setNewJobForm] = useState({
-    title: "",
-    description: "",
-    apprenticesNeeded: 1,
-    expectedDuration: "",
-    daysNeeded: 0,
-    startDate: "",
-    hoursPerDay: 8,
-    workDays: [] as string[],
-    payRate: "",
-    requirements: [] as string[],
-    requiredSkills: [] as string[],
-    priority: "medium" as "high" | "medium" | "low",
-  })
-  const [reviewForm, setReviewForm] = useState({
-    jobId: "",
-    revieweeId: "",
-    reviewerType: "shop" as "shop" | "apprentice",
-    rating: 5,
-    comment: "",
-    jobTitle: "",
-  })
-  const [jobToReview, setJobToReview] = useState<ActiveJob | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
   const { toast } = useToast()
-
-  const workDayOptions = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-  const skillOptions = [
-    "Basic Electrical Theory",
-    "Wiring Installation",
-    "Circuit Analysis",
-    "Motor Controls",
-    "Panel Installation",
-    "Conduit Bending",
-    "Blueprint Reading",
-    "Safety Protocols",
-    "Hand Tools",
-    "Power Tools",
-  ]
+  const [user, setUser] = useState<User | null>(null)
+  const [jobPostings, setJobPostings] = useState<JobPosting[]>([])
+  const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([])
+  const [invitations, setInvitations] = useState<JobInvitation[]>([])
+  const [apprentices, setApprentices] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
+  const [newJob, setNewJob] = useState<Partial<JobPosting>>({
+    title: "",
+    description: "",
+    apprentices_needed: 1,
+    expected_duration: "",
+    days_needed: 1,
+    start_date: new Date().toISOString().split("T")[0],
+    hours_per_day: 8,
+    work_days: [],
+    pay_rate: "",
+    requirements: [],
+    required_skills: [],
+    priority: "medium",
+    status: "active",
+  })
+  const [selectedJobForInvite, setSelectedJobForInvite] = useState<JobPosting | null>(null)
+  const [recommendedApprentices, setRecommendedApprentices] = useState<User[]>([])
 
   useEffect(() => {
-    const user = getCurrentUser()
-    if (!user || user.type !== "shop") {
-      router.push("/login")
-      return
+    const loadData = async () => {
+      const currentUser = await getCurrentUser()
+      if (!currentUser || currentUser.type !== "shop") {
+        router.push("/login")
+        return
+      }
+      setUser(currentUser)
+      await fetchShopData(currentUser.id)
+      setLoading(false)
     }
-    setCurrentUser(user)
-    fetchData(user.id)
+    loadData()
   }, [router])
 
-  const fetchData = async (shopId: string) => {
-    setIsLoading(true)
+  const fetchShopData = async (shopId: string) => {
     try {
-      const postings = await getJobPostings(shopId)
+      const [postings, active, invites, allApprentices] = await Promise.all([
+        getJobPostings(shopId),
+        getActiveJobs({ shopId }),
+        getJobInvitations({ shopId }),
+        getUsers("apprentice"),
+      ])
       setJobPostings(postings)
-
-      const active = await getActiveJobs(shopId, "shop", "in-progress")
       setActiveJobs(active)
+      setInvitations(invites)
+      setApprentices(allApprentices)
+    } catch (error) {
+      console.error("Failed to fetch shop data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load dashboard data.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleLogout = async () => {
+    await logoutUser()
+    router.push("/")
+  }
+
+  const handleNewJobChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { id, value } = e.target
+    setNewJob((prev) => ({ ...prev, [id]: value }))
+  }
+
+  const handleNewJobSelectChange = (id: string, value: string | number) => {
+    setNewJob((prev) => ({ ...prev, [id]: value }))
+  }
+
+  const handleWorkDaysChange = (day: string, isChecked: boolean) => {
+    setNewJob((prev) => {
+      const currentDays = prev.work_days || []
+      if (isChecked) {
+        return { ...prev, work_days: [...currentDays, day] }
+      } else {
+        return { ...prev, work_days: currentDays.filter((d) => d !== day) }
+      }
+    })
+  }
+
+  const handleRequirementsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewJob((prev) => ({ ...prev, requirements: e.target.value.split(",").map((s) => s.trim()) }))
+  }
+
+  const handleRequiredSkillsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewJob((prev) => ({ ...prev, required_skills: e.target.value.split(",").map((s) => s.trim()) }))
+  }
+
+  const handlePostJob = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user) return
+
+    setLoading(true)
+    try {
+      const postedJob = await createJobPosting({ ...newJob, shop_id: user.id })
+      toast({
+        title: "Job Posted!",
+        description: `"${postedJob.title}" has been successfully posted.`,
+      })
+      setNewJob({
+        title: "",
+        description: "",
+        apprentices_needed: 1,
+        expected_duration: "",
+        days_needed: 1,
+        start_date: new Date().toISOString().split("T")[0],
+        hours_per_day: 8,
+        work_days: [],
+        pay_rate: "",
+        requirements: [],
+        required_skills: [],
+        priority: "medium",
+        status: "active",
+      })
+      await fetchShopData(user.id) // Refresh data
     } catch (error: any) {
       toast({
-        title: "Error loading data",
-        description: error.message || "Failed to fetch dashboard data.",
+        title: "Error Posting Job",
+        description: error.message || "An error occurred while posting the job.",
         variant: "destructive",
       })
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  const handleNewJobChange = (field: string, value: any) => {
-    setNewJobForm((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const handleWorkDayToggle = (day: string) => {
-    setNewJobForm((prev) => ({
-      ...prev,
-      workDays: prev.workDays.includes(day) ? prev.workDays.filter((d) => d !== day) : [...prev.workDays, day],
-    }))
-  }
-
-  const handleRequiredSkillToggle = (skill: string) => {
-    setNewJobForm((prev) => ({
-      ...prev,
-      requiredSkills: prev.requiredSkills.includes(skill)
-        ? prev.requiredSkills.filter((s) => s !== skill)
-        : [...prev.requiredSkills, skill],
-    }))
-  }
-
-  const handleCreateJob = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!currentUser) return
-
+  const handleDeleteJob = async (jobId: string) => {
+    if (!user) return
+    setLoading(true)
     try {
-      const jobData = {
-        ...newJobForm,
-        shopId: currentUser.id,
-        applicants: 0,
-        postedDate: new Date().toISOString(),
-        status: "active" as const,
-      }
-      await createJobPosting(jobData)
-      toast({ title: "Job posted successfully!" })
-      setNewJobForm({
-        title: "",
-        description: "",
-        apprenticesNeeded: 1,
-        expectedDuration: "",
-        daysNeeded: 0,
-        startDate: "",
-        hoursPerDay: 8,
-        workDays: [],
-        payRate: "",
-        requirements: [],
-        requiredSkills: [],
-        priority: "medium",
+      await deleteJobPosting(jobId)
+      toast({
+        title: "Job Deleted",
+        description: "The job posting has been successfully deleted.",
       })
-      fetchData(currentUser.id) // Refresh job postings
+      await fetchShopData(user.id)
     } catch (error: any) {
       toast({
-        title: "Error posting job",
-        description: error.message || "Failed to create job posting.",
+        title: "Error Deleting Job",
+        description: error.message || "An error occurred while deleting the job.",
         variant: "destructive",
       })
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleCompleteJob = (job: ActiveJob) => {
-    setJobToReview(job)
-    setReviewForm((prev) => ({
-      ...prev,
-      jobId: job.id,
-      revieweeId: job.apprenticeId,
-      jobTitle: job.title,
-    }))
+  const handleOpenInviteDialog = (job: JobPosting) => {
+    setSelectedJobForInvite(job)
+    const matches = findMatchingApprentices(job, apprentices)
+    const apprenticesWithScores = matches
+      .map((app) => ({
+        ...app,
+        matchScore: calculateMatchScore(job, app),
+      }))
+      .sort((a, b) => b.matchScore - a.matchScore) // Sort by score descending
+    setRecommendedApprentices(apprenticesWithScores)
   }
 
-  const handleReviewChange = (field: string, value: any) => {
-    setReviewForm((prev) => ({ ...prev, [field]: value }))
-  }
+  const handleSendInvitation = async (apprenticeId: string) => {
+    if (!user || !selectedJobForInvite) return
 
-  const submitReview = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!currentUser || !jobToReview) return
-
+    setLoading(true)
     try {
-      const reviewData: Omit<Review, "id" | "date"> = {
-        ...reviewForm,
-        reviewerId: currentUser.id,
-        reviewerType: "shop",
+      const invitation: Partial<JobInvitation> = {
+        job_posting_id: selectedJobForInvite.id,
+        shop_id: user.id,
+        apprentice_id: apprenticeId,
+        shop_name: user.business_name || user.owner_name || "Your Shop",
+        title: selectedJobForInvite.title,
+        description: selectedJobForInvite.description,
+        pay_rate: selectedJobForInvite.pay_rate,
+        days_needed: selectedJobForInvite.days_needed,
+        start_date: selectedJobForInvite.start_date,
+        hours_per_day: selectedJobForInvite.hours_per_day,
+        work_days: selectedJobForInvite.work_days,
+        requirements: selectedJobForInvite.requirements,
+        required_skills: selectedJobForInvite.required_skills,
+        location: user.city + ", " + user.state, // Assuming shop location
+        priority: selectedJobForInvite.priority,
+        total_pay: selectedJobForInvite.total_cost,
+        weekly_pay: selectedJobForInvite.weekly_payment,
+        status: "pending",
       }
-      await createReview(reviewData)
-
-      // Update active job status to 'reviewed'
-      await updateActiveJob(jobToReview.id, { status: "reviewed" })
-
-      toast({ title: "Review submitted and job completed!" })
-      setJobToReview(null)
-      setReviewForm({
-        jobId: "",
-        revieweeId: "",
-        reviewerType: "shop",
-        rating: 5,
-        comment: "",
-        jobTitle: "",
+      await createJobInvitation(invitation)
+      toast({
+        title: "Invitation Sent!",
+        description: "The invitation has been sent to the apprentice.",
       })
-      fetchData(currentUser.id) // Refresh active jobs
+      setSelectedJobForInvite(null) // Close dialog
+      await fetchShopData(user.id) // Refresh data
     } catch (error: any) {
       toast({
-        title: "Error submitting review",
-        description: error.message || "Failed to submit review.",
+        title: "Error Sending Invitation",
+        description: error.message || "An error occurred while sending the invitation.",
         variant: "destructive",
       })
+    } finally {
+      setLoading(false)
     }
   }
 
-  if (isLoading) {
+  const handleCompleteJob = async (job: ActiveJob) => {
+    router.push(`/job/${job.id}/complete`)
+  }
+
+  if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
+      <div className="flex min-h-screen items-center justify-center">
         <p>Loading dashboard...</p>
       </div>
     )
   }
 
-  if (!currentUser) {
+  if (!user) {
     return null // Should redirect to login
   }
 
+  const totalJobsPosted = jobPostings.length
+  const activeJobCount = activeJobs.filter((job) => job.status === "in-progress").length
+  const pendingInvitationsCount = invitations.filter((invite) => invite.status === "pending").length
+
   return (
-    <div className="flex flex-col min-h-screen">
-      <header className="px-4 lg:px-6 h-14 flex items-center border-b">
-        <div className="flex items-center justify-center gap-2">
-          <Zap className="h-6 w-6 text-yellow-500" />
-          <span className="text-lg font-bold">Crew Solutions</span>
-        </div>
-        <nav className="ml-auto flex gap-4 sm:gap-6">
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setCurrentUser(null)
-              router.push("/login")
-            }}
-          >
+    <div className="flex min-h-screen w-full flex-col bg-gray-100 dark:bg-gray-900">
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-white px-4 dark:bg-gray-800">
+        <h1 className="text-xl font-semibold">Shop Dashboard</h1>
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-medium">Welcome, {user.business_name || user.owner_name}!</span>
+          <Button variant="outline" onClick={handleLogout}>
             Logout
           </Button>
-        </nav>
+        </div>
       </header>
-      <main className="flex-1 p-4 md:p-6">
-        <div className="max-w-6xl mx-auto grid gap-6">
-          <h1 className="text-3xl font-bold">Shop Dashboard</h1>
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Welcome, {currentUser.ownerName || currentUser.businessName}!</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-500">Manage your job postings and active apprentices.</p>
-                <div className="mt-4 flex items-center gap-2">
-                  <StarIcon className="w-5 h-5 fill-yellow-500 text-yellow-500" />
-                  <span className="font-medium">{currentUser.rating?.toFixed(1) || "N/A"} Stars</span>
-                  <span className="text-gray-500">({currentUser.jobsCompleted || 0} Jobs Completed)</span>
-                </div>
-              </CardContent>
-            </Card>
+      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-10">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Jobs Posted</CardTitle>
+              <BriefcaseIcon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{totalJobsPosted}</div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">All time</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Jobs</CardTitle>
+              <CheckCircleIcon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{activeJobCount}</div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Currently in progress</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pending Invitations</CardTitle>
+              <Send className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{pendingInvitationsCount}</div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Awaiting apprentice response</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="post-job" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="post-job">Post New Job</TabsTrigger>
+            <TabsTrigger value="my-jobs">My Job Postings</TabsTrigger>
+            <TabsTrigger value="active-jobs">Active Jobs</TabsTrigger>
+          </TabsList>
+          <TabsContent value="post-job">
             <Card>
               <CardHeader>
                 <CardTitle>Post a New Job</CardTitle>
+                <CardDescription>Fill out the details to find the perfect apprentice for your project.</CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleCreateJob} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="title">Job Title</Label>
-                      <Input
-                        id="title"
-                        value={newJobForm.title}
-                        onChange={(e) => handleNewJobChange("title", e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="payRate">Pay Rate</Label>
-                      <Input
-                        id="payRate"
-                        value={newJobForm.payRate}
-                        onChange={(e) => handleNewJobChange("payRate", e.target.value)}
-                        placeholder="$XX/hour or Flat Rate"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      value={newJobForm.description}
-                      onChange={(e) => handleNewJobChange("description", e.target.value)}
+                <form onSubmit={handlePostJob} className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="title">Job Title</Label>
+                    <Input
+                      id="title"
+                      placeholder="Electrical Wiring Assistant"
+                      value={newJob.title}
+                      onChange={handleNewJobChange}
                       required
                     />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="apprenticesNeeded">Apprentices Needed</Label>
+                  <div className="grid gap-2">
+                    <Label htmlFor="description">Job Description</Label>
+                    <Textarea
+                      id="description"
+                      placeholder="Detailed description of the tasks and responsibilities."
+                      value={newJob.description}
+                      onChange={handleNewJobChange}
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="apprentices_needed">Apprentices Needed</Label>
                       <Input
-                        id="apprenticesNeeded"
+                        id="apprentices_needed"
                         type="number"
-                        value={newJobForm.apprenticesNeeded}
-                        onChange={(e) => handleNewJobChange("apprenticesNeeded", Number.parseInt(e.target.value))}
+                        value={newJob.apprentices_needed}
+                        onChange={handleNewJobChange}
                         min="1"
                         required
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="expectedDuration">Expected Duration</Label>
+                    <div className="grid gap-2">
+                      <Label htmlFor="pay_rate">Pay Rate (e.g., "$20-25/hour")</Label>
                       <Input
-                        id="expectedDuration"
-                        value={newJobForm.expectedDuration}
-                        onChange={(e) => handleNewJobChange("expectedDuration", e.target.value)}
+                        id="pay_rate"
+                        placeholder="$20-25/hour"
+                        value={newJob.pay_rate}
+                        onChange={handleNewJobChange}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="start_date">Start Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !newJob.start_date && "text-muted-foreground",
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {newJob.start_date ? format(new Date(newJob.start_date), "PPP") : <span>Pick a date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={newJob.start_date ? new Date(newJob.start_date) : undefined}
+                            onSelect={(date) =>
+                              handleNewJobSelectChange("start_date", date?.toISOString().split("T")[0] || "")
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="expected_duration">Expected Duration</Label>
+                      <Input
+                        id="expected_duration"
                         placeholder="e.g., 2 weeks, 1 month"
+                        value={newJob.expected_duration}
+                        onChange={handleNewJobChange}
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="daysNeeded">Total Days Needed</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="days_needed">Total Days Needed</Label>
                       <Input
-                        id="daysNeeded"
+                        id="days_needed"
                         type="number"
-                        value={newJobForm.daysNeeded}
-                        onChange={(e) => handleNewJobChange("daysNeeded", Number.parseInt(e.target.value))}
+                        value={newJob.days_needed}
+                        onChange={handleNewJobChange}
                         min="1"
                         required
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="startDate">Expected Start Date</Label>
+                    <div className="grid gap-2">
+                      <Label htmlFor="hours_per_day">Hours Per Day</Label>
                       <Input
-                        id="startDate"
-                        type="date"
-                        value={newJobForm.startDate}
-                        onChange={(e) => handleNewJobChange("startDate", e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="hoursPerDay">Hours Per Day</Label>
-                      <Input
-                        id="hoursPerDay"
+                        id="hours_per_day"
                         type="number"
-                        value={newJobForm.hoursPerDay}
-                        onChange={(e) => handleNewJobChange("hoursPerDay", Number.parseInt(e.target.value))}
+                        value={newJob.hours_per_day}
+                        onChange={handleNewJobChange}
                         min="1"
                         max="12"
                         required
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="priority">Priority</Label>
-                      <Select
-                        value={newJobForm.priority}
-                        onValueChange={(value) => handleNewJobChange("priority", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select priority" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="high">High</SelectItem>
-                          <SelectItem value="medium">Medium</SelectItem>
-                          <SelectItem value="low">Low</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
                   </div>
-                  <div className="space-y-2">
+                  <div className="grid gap-2">
                     <Label>Work Days</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {workDayOptions.map((day) => (
+                    <div className="flex flex-wrap gap-2">
+                      {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
                         <div key={day} className="flex items-center space-x-2">
                           <Checkbox
-                            id={`work-day-${day}`}
-                            checked={newJobForm.workDays.includes(day)}
-                            onCheckedChange={() => handleWorkDayToggle(day)}
+                            id={`day-${day}`}
+                            checked={newJob.work_days?.includes(day) || false}
+                            onCheckedChange={(checked) => handleWorkDaysChange(day, !!checked)}
                           />
-                          <Label htmlFor={`work-day-${day}`}>{day}</Label>
+                          <Label htmlFor={`day-${day}`}>{day}</Label>
                         </div>
                       ))}
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Required Skills</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {skillOptions.map((skill) => (
-                        <div key={skill} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`skill-${skill}`}
-                            checked={newJobForm.requiredSkills.includes(skill)}
-                            onCheckedChange={() => handleRequiredSkillToggle(skill)}
-                          />
-                          <Label htmlFor={`skill-${skill}`} className="text-sm font-normal">
-                            {skill}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="requirements">Additional Requirements (comma-separated)</Label>
+                  <div className="grid gap-2">
+                    <Label htmlFor="requirements">Requirements (comma-separated)</Label>
                     <Input
                       id="requirements"
-                      value={newJobForm.requirements.join(", ")}
-                      onChange={(e) =>
-                        handleNewJobChange(
-                          "requirements",
-                          e.target.value.split(",").map((s) => s.trim()),
-                        )
-                      }
-                      placeholder="e.g., Must have own tools, Valid driver's license"
+                      placeholder="e.g., Basic tools, OSHA certified"
+                      value={newJob.requirements?.join(", ") || ""}
+                      onChange={handleRequirementsChange}
                     />
                   </div>
-                  <Button type="submit" className="w-full">
-                    Post Job
+                  <div className="grid gap-2">
+                    <Label htmlFor="required_skills">Required Skills (comma-separated)</Label>
+                    <Input
+                      id="required_skills"
+                      placeholder="e.g., Wiring, Pipe Fitting, HVAC Maintenance"
+                      value={newJob.required_skills?.join(", ") || ""}
+                      onChange={handleRequiredSkillsChange}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="priority">Priority</Label>
+                    <Select
+                      onValueChange={(value) => handleNewJobSelectChange("priority", value)}
+                      value={newJob.priority}
+                    >
+                      <SelectTrigger id="priority">
+                        <SelectValue placeholder="Select priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="low">Low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "Posting Job..." : "Post Job"}
                   </Button>
                 </form>
               </CardContent>
             </Card>
-          </div>
-
-          <Tabs defaultValue="active-jobs" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="active-jobs">Active Jobs</TabsTrigger>
-              <TabsTrigger value="my-postings">My Job Postings</TabsTrigger>
-            </TabsList>
-            <TabsContent value="active-jobs">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Active Jobs</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                  {activeJobs.length === 0 ? (
-                    <p className="text-gray-500">No active jobs at the moment.</p>
-                  ) : (
-                    activeJobs.map((job) => (
-                      <div
-                        key={job.id}
-                        className="border p-4 rounded-md flex flex-col md:flex-row justify-between items-start md:items-center"
-                      >
-                        <div>
-                          <h3 className="font-semibold text-lg">{job.title}</h3>
-                          <p className="text-sm text-gray-500">Apprentice: {job.apprenticeName}</p>
-                          <p className="text-sm text-gray-500">Start Date: {job.startDate}</p>
-                          <p className="text-sm text-gray-500">Status: {job.status}</p>
-                        </div>
-                        <div className="mt-4 md:mt-0">
-                          <Button onClick={() => handleCompleteJob(job)}>Complete Job & Review</Button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-            <TabsContent value="my-postings">
-              <Card>
-                <CardHeader>
-                  <CardTitle>My Job Postings</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                  {jobPostings.length === 0 ? (
-                    <p className="text-gray-500">You haven't posted any jobs yet.</p>
-                  ) : (
-                    jobPostings.map((job) => (
-                      <div key={job.id} className="border p-4 rounded-md">
-                        <h3 className="font-semibold text-lg">{job.title}</h3>
-                        <p className="text-sm text-gray-500">{job.description}</p>
-                        <p className="text-sm text-gray-500">Status: {job.status}</p>
-                        <p className="text-sm text-gray-500">Applicants: {job.applicants}</p>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-
-          {jobToReview && (
-            <Card className="mt-6">
+          </TabsContent>
+          <TabsContent value="my-jobs">
+            <Card>
               <CardHeader>
-                <CardTitle>Review Apprentice for {jobToReview.title}</CardTitle>
+                <CardTitle>My Job Postings</CardTitle>
+                <CardDescription>Manage your active and filled job listings.</CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={submitReview} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="rating">Rating (1-5 Stars)</Label>
-                    <Input
-                      id="rating"
-                      type="number"
-                      value={reviewForm.rating}
-                      onChange={(e) => handleReviewChange("rating", Number.parseInt(e.target.value))}
-                      min="1"
-                      max="5"
-                      required
-                    />
+                {jobPostings.length === 0 ? (
+                  <p>You haven't posted any jobs yet.</p>
+                ) : (
+                  <div className="grid gap-4">
+                    {jobPostings.map((job) => (
+                      <Card key={job.id} className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-lg font-semibold">{job.title}</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              {job.pay_rate} &bull; {job.expected_duration} &bull; {job.status}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                  <Send className="h-4 w-4 mr-2" /> Invite Apprentices
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Invite Apprentices for "{job.title}"</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Select apprentices to send an invitation for this job.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <div className="max-h-60 overflow-y-auto">
+                                  {recommendedApprentices.length === 0 ? (
+                                    <p>No apprentices found matching this job's requirements.</p>
+                                  ) : (
+                                    <div className="grid gap-3">
+                                      {recommendedApprentices.map((apprentice) => (
+                                        <div
+                                          key={apprentice.id}
+                                          className="flex items-center justify-between rounded-md border p-3"
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            {/* Placeholder for Avatar component */}
+                                            <div>
+                                              <p className="font-medium">
+                                                {apprentice.first_name} {apprentice.last_name}
+                                              </p>
+                                              <p className="text-sm text-gray-500">{apprentice.experience_level}</p>
+                                              <p className="text-xs text-gray-500">
+                                                Match Score: {apprentice.matchScore}%
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() => handleSendInvitation(apprentice.id)}
+                                            disabled={
+                                              loading ||
+                                              invitations.some(
+                                                (inv) =>
+                                                  inv.job_posting_id === job.id &&
+                                                  inv.apprentice_id === apprentice.id &&
+                                                  inv.status === "pending",
+                                              )
+                                            }
+                                          >
+                                            {invitations.some(
+                                              (inv) =>
+                                                inv.job_posting_id === job.id &&
+                                                inv.apprentice_id === apprentice.id &&
+                                                inv.status === "pending",
+                                            )
+                                              ? "Invited"
+                                              : "Invite"}
+                                          </Button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel onClick={() => setSelectedJobForInvite(null)}>
+                                    Close
+                                  </AlertDialogCancel>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This action cannot be undone. This will permanently delete your job posting.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteJob(job.id)}>Delete</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </div>
+                        <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                          <p>{job.description}</p>
+                          <p className="mt-1">**Required Skills:** {job.required_skills?.join(", ") || "N/A"}</p>
+                        </div>
+                      </Card>
+                    ))}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="comment">Comment</Label>
-                    <Textarea
-                      id="comment"
-                      value={reviewForm.comment}
-                      onChange={(e) => handleReviewChange("comment", e.target.value)}
-                      placeholder="Share your feedback on the apprentice's performance."
-                      required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full">
-                    Submit Review
-                  </Button>
-                </form>
+                )}
               </CardContent>
             </Card>
-          )}
-        </div>
+          </TabsContent>
+          <TabsContent value="active-jobs">
+            <Card>
+              <CardHeader>
+                <CardTitle>Active Jobs</CardTitle>
+                <CardDescription>View and manage jobs currently in progress.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {activeJobs.length === 0 ? (
+                  <p>You have no active jobs.</p>
+                ) : (
+                  <div className="grid gap-4">
+                    {activeJobs.map((job) => (
+                      <Card key={job.id} className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-lg font-semibold">{job.title}</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              Apprentice: {job.apprentice_name} &bull; Status: {job.status}
+                            </p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              Start Date: {format(new Date(job.start_date), "PPP")}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            {job.can_complete && (
+                              <Button variant="outline" size="sm" onClick={() => handleCompleteJob(job)}>
+                                Complete Job
+                              </Button>
+                            )}
+                            {job.status === "in-progress" && (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => router.push(`/job/${job.id}/review`)}
+                              >
+                                Review Apprentice
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-2">
+                          <Label>Progress</Label>
+                          <Progress value={(job.days_worked / job.total_days) * 100} className="w-full" />
+                          <p className="text-sm text-gray-500 mt-1">
+                            {job.days_worked} of {job.total_days} days completed
+                          </p>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   )
