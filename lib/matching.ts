@@ -1,134 +1,148 @@
-import type { User, JobPosting } from "./storage"
-
-export interface MatchScore {
-  overall: number
-  skillMatch: number
-  availabilityMatch: number
-  locationMatch: number
-  experienceMatch: number
+interface User {
+  id: string
+  type: string
+  firstName?: string
+  lastName?: string
+  businessName?: string
+  city: string
+  state: string
+  skills?: string[]
+  experienceLevel?: string
+  availability?: string
+  rating?: number
+  jobsCompleted?: number
+  goals?: string
+  hoursCompleted?: string
+  yearsInBusiness?: string
+  employeeCount?: string
 }
 
-export const calculateMatchScore = (job: JobPosting, apprentice: User): number => {
+interface JobPosting {
+  id: string
+  shopId: string
+  title: string
+  description: string
+  requirements: string[]
+  experienceLevel: string
+  availability: string
+  payRange: string
+  location: string
+  postedDate: string
+  isActive: boolean
+}
+
+export function calculateMatchScore(apprentice: User, shop: User): number {
   let score = 0
-  let factors = 0
+  const maxScore = 100
 
-  // Skill matching (40% weight)
-  if (job.requiredSkills && apprentice.skills) {
-    const matchingSkills = job.requiredSkills.filter((skill) =>
-      apprentice.skills!.some(
-        (apprenticeSkill) =>
-          apprenticeSkill.toLowerCase().includes(skill.toLowerCase()) ||
-          skill.toLowerCase().includes(apprenticeSkill.toLowerCase()),
-      ),
-    )
-    const skillScore = (matchingSkills.length / job.requiredSkills.length) * 40
-    score += skillScore
-    factors += 40
+  // Location matching (30 points)
+  if (apprentice.state === shop.state) {
+    score += 20
+    if (apprentice.city === shop.city) {
+      score += 10
+    }
   }
 
-  // Experience level matching (25% weight)
-  if (apprentice.experienceLevel) {
-    const experienceScore = getExperienceScore(apprentice.experienceLevel)
-    score += experienceScore * 25
-    factors += 25
+  // Experience level matching (25 points)
+  const experienceMap: { [key: string]: number } = {
+    beginner: 1,
+    "some-knowledge": 2,
+    "basic-experience": 3,
+    intermediate: 4,
   }
 
-  // Availability matching (20% weight)
-  if (apprentice.availability) {
-    const availabilityScore = getAvailabilityScore(apprentice.availability, job.workDays)
-    score += availabilityScore * 20
-    factors += 20
+  const apprenticeExp = experienceMap[apprentice.experienceLevel || "beginner"] || 1
+  const shopPreference = 2 // Assume shops prefer some experience but will take beginners
+
+  if (apprenticeExp >= shopPreference) {
+    score += 25
+  } else if (apprenticeExp === shopPreference - 1) {
+    score += 15
   }
 
-  // Location proximity (15% weight)
-  if (apprentice.city && apprentice.state) {
-    // For demo purposes, assume all are in CA and give partial score
-    const locationScore = 0.8 // 80% match for same state
-    score += locationScore * 15
-    factors += 15
+  // Availability matching (20 points)
+  if (apprentice.availability === "full-time" || apprentice.availability === "flexible") {
+    score += 20
+  } else if (apprentice.availability === "part-time") {
+    score += 10
   }
 
-  return factors > 0 ? Math.round((score / factors) * 100) : 0
+  // Skills matching (15 points)
+  const commonSkills =
+    apprentice.skills?.filter((skill) =>
+      ["Basic Electrical Theory", "Wiring Installation", "Safety Protocols", "Hand Tools"].includes(skill),
+    ) || []
+  score += Math.min(commonSkills.length * 3, 15)
+
+  // Rating bonus (10 points)
+  if (apprentice.rating && apprentice.rating >= 4) {
+    score += 10
+  } else if (apprentice.rating && apprentice.rating >= 3) {
+    score += 5
+  }
+
+  return Math.min(score, maxScore)
 }
 
-const getExperienceScore = (experienceLevel: string): number => {
-  switch (experienceLevel.toLowerCase()) {
-    case "advanced":
-    case "expert":
-      return 1.0
-    case "intermediate":
-      return 0.8
-    case "basic experience":
-    case "some knowledge":
-      return 0.6
-    case "beginner":
-    case "entry level":
-      return 0.4
-    default:
-      return 0.5
-  }
+export function findMatches(apprentice: User, shops: User[]): Array<User & { matchScore: number }> {
+  return shops
+    .map((shop) => ({
+      ...shop,
+      matchScore: calculateMatchScore(apprentice, shop),
+    }))
+    .filter((match) => match.matchScore >= 40) // Only show matches with 40%+ compatibility
+    .sort((a, b) => b.matchScore - a.matchScore)
 }
 
-const getAvailabilityScore = (availability: string, workDays: string[]): number => {
-  if (availability.toLowerCase().includes("full-time")) {
-    return 1.0
-  } else if (availability.toLowerCase().includes("part-time")) {
-    return 0.7
-  } else if (availability.toLowerCase().includes("weekend")) {
-    // Check if job requires weekends
-    const hasWeekends = workDays.some(
-      (day) => day.toLowerCase().includes("saturday") || day.toLowerCase().includes("sunday"),
-    )
-    return hasWeekends ? 0.9 : 0.3
-  }
-  return 0.5
-}
-
-export const findMatchingApprentices = (job: JobPosting, apprentices: User[]): User[] => {
+export function findApprenticeMatches(shop: User, apprentices: User[]): Array<User & { matchScore: number }> {
   return apprentices
-    .filter((apprentice) => apprentice.type === "apprentice")
     .map((apprentice) => ({
       ...apprentice,
-      matchScore: calculateMatchScore(job, apprentice),
+      matchScore: calculateMatchScore(apprentice, shop),
     }))
-    .filter((apprentice) => apprentice.matchScore > 30) // Only show matches above 30%
+    .filter((match) => match.matchScore >= 40)
     .sort((a, b) => b.matchScore - a.matchScore)
 }
 
-export const getRecommendedJobs = (apprentice: User, jobs: JobPosting[]): JobPosting[] => {
+export function generateJobRecommendations(
+  apprentice: User,
+  jobs: JobPosting[],
+): Array<JobPosting & { matchScore: number }> {
   return jobs
-    .filter((job) => job.status === "active")
-    .map((job) => ({
-      ...job,
-      matchScore: calculateMatchScore(job, apprentice),
-    }))
-    .filter((job) => job.matchScore > 30)
-    .sort((a, b) => b.matchScore - a.matchScore)
-}
+    .filter((job) => job.isActive)
+    .map((job) => {
+      let score = 0
 
-export function matchApprenticesToJobs(apprentices: any[], jobPostings: any[]): any[] {
-  // Placeholder for a more sophisticated matching algorithm
-  // For now, it returns a simple match based on basic criteria
-  const matches: any[] = []
+      // Experience level match
+      if (job.experienceLevel === apprentice.experienceLevel) {
+        score += 30
+      } else if (job.experienceLevel === "entry-level" && apprentice.experienceLevel === "beginner") {
+        score += 25
+      }
 
-  jobPostings.forEach((job) => {
-    apprentices.forEach((apprentice) => {
-      // Example: simple match if apprentice has at least one required skill
-      const hasRequiredSkills =
-        job.required_skills && job.required_skills.some((skill: string) => apprentice.skills?.includes(skill))
+      // Availability match
+      if (job.availability === apprentice.availability || apprentice.availability === "flexible") {
+        score += 25
+      }
 
-      // Example: simple match if apprentice is available for the job's duration
-      const isAvailable = apprentice.availability === "Full-time" || apprentice.availability === "Flexible"
+      // Skills match
+      const apprenticeSkills = apprentice.skills || []
+      const requiredSkills = job.requirements || []
+      const matchingSkills = apprenticeSkills.filter((skill) =>
+        requiredSkills.some((req) => req.toLowerCase().includes(skill.toLowerCase())),
+      )
+      score += Math.min(matchingSkills.length * 5, 25)
 
-      if (hasRequiredSkills && isAvailable) {
-        matches.push({
-          jobId: job.id,
-          apprenticeId: apprentice.id,
-          score: 1, // Simple score
-        })
+      // Location bonus (assuming job.location contains city/state info)
+      if (job.location.includes(apprentice.state)) {
+        score += 20
+      }
+
+      return {
+        ...job,
+        matchScore: score,
       }
     })
-  })
-
-  return matches
+    .filter((job) => job.matchScore >= 30)
+    .sort((a, b) => b.matchScore - a.matchScore)
 }

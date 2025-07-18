@@ -1,621 +1,665 @@
+"use client"
+
+import { useState } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import Link from "next/link"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
 import {
+  CheckCircle,
   Zap,
-  StarIcon,
-  CheckCircleIcon,
-  BriefcaseIcon,
-  MapPinIcon,
-  GraduationCapIcon,
-  Users,
+  Briefcase,
+  UserCheck,
+  FileText,
+  DollarSign,
+  ShieldCheck,
   Clock,
-  Shield,
-  Phone,
-  Mail,
+  ChevronLeft,
+  ChevronRight,
+  Star,
   MapPin,
 } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
 
-export default function LandingPage() {
-  // Hardcoded demo apprentice profiles, now tailored for electricians
-  const apprenticeProfiles = [
-    {
-      id: "demo-apprentice-1",
-      name: "Marcus Chen",
-      title: "Electrical Apprentice",
-      rating: 4.8,
-      jobsCompleted: 12,
-      location: "San Francisco, CA",
-      experience: "2 years experience",
-      education: "Trade School Graduate",
-      skills: ["Wiring", "Troubleshooting", "Safety Protocols", "Blueprint Reading"],
-      bio: "Dedicated electrical apprentice with 2 years of hands-on experience in residential and commercial projects. Eager to learn and contribute to a dynamic team.",
-      profileImage: "/placeholder.svg?height=100&width=100",
-    },
-    {
-      id: "demo-apprentice-2",
-      name: "Sarah Lee",
-      title: "Electrical Apprentice",
-      rating: 4.7,
-      jobsCompleted: 9,
-      location: "Oakland, CA",
-      experience: "1.5 years experience",
-      education: "Community College Program",
-      skills: ["Circuit Analysis", "Panel Installation", "Conduit Bending", "Motor Controls"],
-      bio: "Enthusiastic electrical apprentice committed to mastering the trade. Proficient in various electrical techniques and always ready for a new challenge.",
-      profileImage: "/placeholder.svg?height=100&width=100",
-    },
-    {
-      id: "demo-apprentice-3",
-      name: "David Kim",
-      title: "Electrical Apprentice",
-      rating: 4.9,
-      jobsCompleted: 15,
-      location: "San Jose, CA",
-      experience: "3 years experience",
-      education: "Vocational Training",
-      skills: ["Industrial Wiring", "High Voltage Systems", "PLC Programming", "Electrical Code Compliance"],
-      bio: "Experienced electrical apprentice specializing in industrial and commercial electrical systems. Detail-oriented and committed to quality work.",
-      profileImage: "/placeholder.svg?height=100&width=100",
-    },
-    {
-      id: "demo-apprentice-4",
-      name: "Jessica Brown",
-      title: "Electrical Apprentice",
-      rating: 4.6,
-      jobsCompleted: 10,
-      location: "Berkeley, CA",
-      experience: "1 year experience",
-      education: "Apprenticeship Program",
-      skills: ["Residential Wiring", "Low Voltage Systems", "Fixture Installation", "Electrical Safety"],
-      bio: "Passionate electrical apprentice with a keen eye for detail and a strong work ethic. Eager to build on foundational skills and contribute to diverse projects.",
-      profileImage: "/placeholder.svg?height=100&width=100",
-    },
-  ]
+const apprenticeProfiles = [
+  {
+    id: 1,
+    name: "Marcus C.",
+    age: 24,
+    location: "San Francisco, CA",
+    experience: "Basic Experience",
+    rating: 4.8,
+    skills: ["Wiring Installation", "Safety Protocols", "Hand Tools"],
+    availability: "Full-time",
+    image: "/placeholder.svg?height=200&width=200",
+  },
+  {
+    id: 2,
+    name: "Sofia R.",
+    age: 22,
+    location: "Oakland, CA",
+    experience: "Some Knowledge",
+    rating: 4.6,
+    skills: ["Basic Electrical Theory", "Circuit Analysis", "Blueprint Reading"],
+    availability: "Part-time",
+    image: "/placeholder.svg?height=200&width=200",
+  },
+  {
+    id: 3,
+    name: "David K.",
+    age: 26,
+    location: "San Jose, CA",
+    experience: "Intermediate",
+    rating: 4.9,
+    skills: ["Motor Controls", "Panel Installation", "Conduit Bending"],
+    availability: "Full-time",
+    image: "/placeholder.svg?height=200&width=200",
+  },
+  {
+    id: 4,
+    name: "Ashley T.",
+    age: 23,
+    location: "Fremont, CA",
+    experience: "Basic Experience",
+    rating: 4.7,
+    skills: ["Wiring Installation", "Power Tools", "Safety Protocols"],
+    availability: "Flexible",
+    image: "/placeholder.svg?height=200&width=200",
+  },
+]
 
-  const testimonials = [
-    {
-      name: "John Smith",
-      role: "Owner, Elite Electrical Services",
-      content:
-        "Crew Solutions has transformed how we find skilled electrical apprentices. The quality of candidates is exceptional, and the platform makes hiring so much easier.",
-      rating: 5,
-      avatar: "/placeholder.svg?height=60&width=60",
-    },
-    {
-      name: "Sarah Johnson",
-      role: "Electrical Apprentice",
-      content:
-        "I found my dream job through Crew Solutions! The platform connected me with amazing electrical shops and helped advance my career in the electrical trade.",
-      rating: 5,
-      avatar: "/placeholder.svg?height=60&width=60",
-    },
-    {
-      name: "Mike Rodriguez",
-      role: "Owner, Bay Area Electrical",
-      content:
-        "The electrical apprentices we've hired through Crew Solutions have been outstanding. Great work ethic, skills, and professionalism. Highly recommend!",
-      rating: 5,
-      avatar: "/placeholder.svg?height=60&width=60",
-    },
-  ]
+export default function Home() {
+  const [currentProfileIndex, setCurrentProfileIndex] = useState(0)
+
+  const nextProfile = () => {
+    setCurrentProfileIndex((prev) => (prev + 1) % apprenticeProfiles.length)
+  }
+
+  const prevProfile = () => {
+    setCurrentProfileIndex((prev) => (prev - 1 + apprenticeProfiles.length) % apprenticeProfiles.length)
+  }
+
+  const currentProfile = apprenticeProfiles[currentProfileIndex]
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId)
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" })
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex h-16 items-center justify-between px-4 md:px-6 border-b">
-        <Link className="flex items-center gap-2 font-semibold" href="/">
-          <Zap className="h-6 w-6 text-yellow-500" />
-          <span className="text-yellow-600">Crew Solutions</span>
-        </Link>
-        <nav className="hidden space-x-4 md:flex">
-          <Link className="font-medium hover:underline text-gray-700 hover:text-yellow-600" href="/login">
-            Login
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-16 items-center justify-between">
+          <Link href="/" className="flex items-center gap-2">
+            <Zap className="h-6 w-6 text-yellow-500" />
+            <span className="text-xl font-bold">Crew Solutions</span>
           </Link>
-          <Link className="font-medium hover:underline text-gray-700 hover:text-yellow-600" href="/signup">
-            Sign Up
-          </Link>
-        </nav>
-        <Button asChild className="md:hidden bg-yellow-500 hover:bg-yellow-600">
-          <Link href="/login">Login</Link>
-        </Button>
+          <nav className="hidden md:flex gap-6">
+            <button
+              onClick={() => scrollToSection("features")}
+              className="text-sm font-medium hover:underline underline-offset-4"
+            >
+              Features
+            </button>
+            <button
+              onClick={() => scrollToSection("how-it-works")}
+              className="text-sm font-medium hover:underline underline-offset-4"
+            >
+              How It Works
+            </button>
+            <button
+              onClick={() => scrollToSection("testimonials")}
+              className="text-sm font-medium hover:underline underline-offset-4"
+            >
+              Testimonials
+            </button>
+            <button
+              onClick={() => scrollToSection("contact")}
+              className="text-sm font-medium hover:underline underline-offset-4"
+            >
+              Contact
+            </button>
+          </nav>
+          <div className="flex items-center gap-4">
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/login">Log In</Link>
+            </Button>
+            <Button size="sm" asChild>
+              <Link href="/signup">Sign Up</Link>
+            </Button>
+          </div>
+        </div>
       </header>
-
       <main className="flex-1">
-        {/* Hero Section */}
-        <section className="w-full py-12 md:py-24 lg:py-32 xl:py-48 bg-gradient-to-br from-yellow-50 to-yellow-100">
+        <section className="w-full py-12 md:py-24 lg:py-32 bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-background">
           <div className="container px-4 md:px-6">
-            <div className="grid gap-6 lg:grid-cols-[1fr_400px] lg:gap-12 xl:grid-cols-[1fr_600px]">
+            <div className="grid gap-6 lg:grid-cols-2 lg:gap-12 items-center">
               <div className="flex flex-col justify-center space-y-4">
                 <div className="space-y-2">
-                  <h1 className="text-3xl font-bold tracking-tighter sm:text-5xl xl:text-6xl/none text-gray-900">
-                    Connect with Top Electrical Apprentices for Your Crew
+                  <Badge variant="outline" className="w-fit border-yellow-500 text-yellow-700 dark:text-yellow-400">
+                    Connecting Talent with Opportunity
+                  </Badge>
+                  <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">
+                    Simplifying Electrical Apprenticeship Hiring
                   </h1>
-                  <p className="max-w-[600px] text-gray-600 md:text-xl">
-                    Crew Solutions helps electrical shops find skilled apprentices for short-term projects and long-term
-                    needs.
+                  <p className="max-w-[600px] text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed dark:text-gray-400">
+                    Crew Solutions connects electrical businesses with vetted apprentices while handling all the
+                    administrative overhead.
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 min-[400px]:flex-row">
-                  <Button asChild className="bg-yellow-500 hover:bg-yellow-600 text-white">
-                    <Link href="/signup?type=shop">Join as an Electrical Shop</Link>
+                  <Button size="lg" className="bg-yellow-500 hover:bg-yellow-600 text-black" asChild>
+                    <Link href="/signup?type=shop">I'm a Shop Owner</Link>
                   </Button>
                   <Button
-                    asChild
+                    size="lg"
                     variant="outline"
-                    className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 bg-transparent"
+                    className="border-yellow-500 text-yellow-700 hover:bg-yellow-50 dark:text-yellow-400 dark:hover:bg-gray-800 bg-transparent"
+                    asChild
                   >
-                    <Link href="/signup?type=apprentice">Join as an Electrical Apprentice</Link>
+                    <Link href="/signup?type=apprentice">I'm an Apprentice</Link>
                   </Button>
                 </div>
               </div>
-              <img
-                alt="Hero"
-                className="mx-auto aspect-video overflow-hidden rounded-xl object-cover sm:w-full lg:order-last shadow-lg"
-                height="400"
-                src="/placeholder.svg?height=400&width=600"
-                width="600"
-              />
+              <div className="mx-auto lg:mx-0 relative">
+                <div className="relative w-full max-w-sm mx-auto">
+                  <h3 className="text-lg font-semibold mb-4 text-center">Available Apprentices</h3>
+
+                  {/* Navigation Arrows */}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="absolute left-0 top-1/2 transform -translate-y-1/2 z-10 bg-white shadow-lg"
+                    onClick={prevProfile}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-white shadow-lg"
+                    onClick={nextProfile}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+
+                  {/* Profile Card */}
+                  <Card className="mx-8 shadow-lg">
+                    <CardHeader className="text-center pb-2">
+                      <img
+                        src={currentProfile.image || "/placeholder.svg"}
+                        alt={currentProfile.name}
+                        className="w-24 h-24 rounded-full mx-auto mb-3 object-cover"
+                      />
+                      <CardTitle className="text-xl">{currentProfile.name}</CardTitle>
+                      <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                        <MapPin className="h-3 w-3" />
+                        {currentProfile.location}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="secondary">{currentProfile.experience}</Badge>
+                        <div className="flex items-center gap-1">
+                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                          <span className="text-sm font-medium">{currentProfile.rating}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-medium mb-2">Skills:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {currentProfile.skills.map((skill) => (
+                            <Badge key={skill} variant="outline" className="text-xs">
+                              {skill}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-sm">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span>{currentProfile.availability}</span>
+                      </div>
+
+                      <div className="flex gap-2 pt-2">
+                        <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700">
+                          View Profile
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1 bg-transparent">
+                          Pass
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Profile Indicators */}
+                  <div className="flex justify-center gap-2 mt-4">
+                    {apprenticeProfiles.map((_, index) => (
+                      <button
+                        key={index}
+                        className={`w-2 h-2 rounded-full transition-colors ${
+                          index === currentProfileIndex ? "bg-yellow-500" : "bg-gray-300"
+                        }`}
+                        onClick={() => setCurrentProfileIndex(index)}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Match notification - moved further down and to the left */}
+                <div className="absolute -bottom-24 -left-12 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 w-64 border-2 border-green-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                    <span className="font-medium">Perfect Match!</span>
+                  </div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                    {currentProfile.name} matches 94% of your requirements
+                  </p>
+                  <Button size="sm" className="w-full bg-green-600 hover:bg-green-700 text-white">
+                    View Profile
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Our Platform Section */}
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-white">
+        <section id="features" className="w-full py-12 md:py-24 lg:py-32">
           <div className="container px-4 md:px-6">
             <div className="flex flex-col items-center justify-center space-y-4 text-center">
               <div className="space-y-2">
-                <div className="inline-block rounded-lg bg-yellow-100 px-3 py-1 text-sm text-yellow-800">
+                <div className="inline-block rounded-lg bg-yellow-100 px-3 py-1 text-sm dark:bg-yellow-800/30">
                   Our Platform
                 </div>
-                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-gray-900">
-                  Connecting Electrical Professionals
-                </h2>
-                <p className="max-w-[900px] text-gray-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  We bridge the gap between experienced electrical shops and talented electrical apprentices, creating
-                  opportunities for growth and success in the electrical industry.
+                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl">Solving Real Industry Problems</h2>
+                <p className="max-w-[900px] text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed dark:text-gray-400">
+                  Our two-sided platform removes barriers for both electrical shops and aspiring apprentices.
                 </p>
               </div>
             </div>
-            <div className="mx-auto grid max-w-5xl items-start gap-8 py-12 lg:grid-cols-2">
-              <Card className="border-yellow-200 shadow-lg">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <BriefcaseIcon className="h-8 w-8 text-yellow-500" />
-                    <CardTitle className="text-yellow-600">For Electrical Shops</CardTitle>
-                  </div>
+            <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 mt-12">
+              <Card>
+                <CardHeader className="flex flex-row items-center gap-4 pb-2">
+                  <Briefcase className="h-8 w-8 text-yellow-500" />
+                  <CardTitle>Simplified Hiring</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <CardDescription className="text-gray-600">
-                    Find qualified electrical apprentices quickly and efficiently. Post jobs, review profiles, and
-                    connect with skilled workers ready to contribute to your electrical projects.
-                  </CardDescription>
-                  <ul className="mt-4 space-y-2 text-sm text-gray-600">
-                    <li className="flex items-center gap-2">
-                      <CheckCircleIcon className="h-4 w-4 text-yellow-500" />
-                      Access to pre-screened electrical apprentices
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircleIcon className="h-4 w-4 text-yellow-500" />
-                      Easy job posting and management
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircleIcon className="h-4 w-4 text-yellow-500" />
-                      Review and rating system
-                    </li>
-                  </ul>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Post openings and browse pre-vetted apprentice profiles to find the perfect match for your shop.
+                  </p>
                 </CardContent>
               </Card>
-              <Card className="border-yellow-200 shadow-lg">
-                <CardHeader>
-                  <GraduationCapIcon className="h-8 w-8 text-yellow-500" />
-                  <CardTitle className="text-yellow-600">For Electrical Apprentices</CardTitle>
+              <Card>
+                <CardHeader className="flex flex-row items-center gap-4 pb-2">
+                  <UserCheck className="h-8 w-8 text-yellow-500" />
+                  <CardTitle>Vetted Talent</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <CardDescription className="text-gray-600">
-                    Discover exciting opportunities with reputable electrical shops. Build your skills, gain experience,
-                    and advance your career in the electrical trade.
-                  </CardDescription>
-                  <ul className="mt-4 space-y-2 text-sm text-gray-600">
-                    <li className="flex items-center gap-2">
-                      <CheckCircleIcon className="h-4 w-4 text-yellow-500" />
-                      Browse quality electrical job opportunities
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircleIcon className="h-4 w-4 text-yellow-500" />
-                      Build your professional profile
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircleIcon className="h-4 w-4 text-yellow-500" />
-                      Connect with established electrical shops
-                    </li>
-                  </ul>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    All apprentices complete skill assessments and background checks before joining our platform.
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center gap-4 pb-2">
+                  <FileText className="h-8 w-8 text-yellow-500" />
+                  <CardTitle>Admin Handled</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    We manage payroll, insurance, benefits, and compliance so you can focus on your business.
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center gap-4 pb-2">
+                  <DollarSign className="h-8 w-8 text-yellow-500" />
+                  <CardTitle>Cost Effective</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Reduce hiring costs and administrative overhead while finding quality apprentices.
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center gap-4 pb-2">
+                  <ShieldCheck className="h-8 w-8 text-yellow-500" />
+                  <CardTitle>Risk Reduction</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    We handle liability concerns, insurance requirements, and regulatory compliance.
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center gap-4 pb-2">
+                  <Clock className="h-8 w-8 text-yellow-500" />
+                  <CardTitle>Time Saving</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Spend less time on paperwork and more time growing your electrical business.
+                  </p>
                 </CardContent>
               </Card>
             </div>
           </div>
         </section>
 
-        {/* Features Section */}
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-yellow-50">
+        <section id="how-it-works" className="w-full py-12 md:py-24 lg:py-32 bg-gray-50 dark:bg-gray-900">
           <div className="container px-4 md:px-6">
             <div className="flex flex-col items-center justify-center space-y-4 text-center">
               <div className="space-y-2">
-                <div className="inline-block rounded-lg bg-yellow-200 px-3 py-1 text-sm text-yellow-800">Features</div>
-                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-gray-900">
-                  Everything You Need to Succeed in Electrical
-                </h2>
-                <p className="max-w-[900px] text-gray-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  Our platform provides comprehensive tools for both electrical shops and apprentices to thrive in the
-                  electrical industry.
-                </p>
-              </div>
-            </div>
-            <div className="mx-auto grid max-w-5xl items-start gap-8 py-12 sm:grid-cols-2 lg:grid-cols-3">
-              <Card className="border-yellow-200 shadow-lg">
-                <CardHeader>
-                  <Users className="h-12 w-12 text-yellow-500 mb-4" />
-                  <CardTitle className="text-yellow-600">Smart Electrical Matching</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-gray-600">
-                    Our algorithm matches electrical apprentices with shops based on skills, location, and project
-                    requirements.
-                  </CardDescription>
-                </CardContent>
-              </Card>
-              <Card className="border-yellow-200 shadow-lg">
-                <CardHeader>
-                  <Clock className="h-12 w-12 text-yellow-500 mb-4" />
-                  <CardTitle className="text-yellow-600">Time Tracking</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-gray-600">
-                    Built-in time tracking and project management tools to keep everyone on the same page.
-                  </CardDescription>
-                </CardContent>
-              </Card>
-              <Card className="border-yellow-200 shadow-lg">
-                <CardHeader>
-                  <Shield className="h-12 w-12 text-yellow-500 mb-4" />
-                  <CardTitle className="text-yellow-600">Verified Electrical Profiles</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-gray-600">
-                    All users are verified with background checks and skill assessments for your peace of mind.
-                  </CardDescription>
-                </CardContent>
-              </Card>
-              <Card className="border-yellow-200 shadow-lg">
-                <CardHeader>
-                  <StarIcon className="h-12 w-12 text-yellow-500 mb-4" />
-                  <CardTitle className="text-yellow-600">Review System</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-gray-600">
-                    Transparent review and rating system helps build trust and reputation in the electrical community.
-                  </CardDescription>
-                </CardContent>
-              </Card>
-              <Card className="border-yellow-200 shadow-lg">
-                <CardHeader>
-                  <BriefcaseIcon className="h-12 w-12 text-yellow-500 mb-4" />
-                  <CardTitle className="text-yellow-600">Job Management</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-gray-600">
-                    Complete job lifecycle management from posting to completion and payment processing.
-                  </CardDescription>
-                </CardContent>
-              </Card>
-              <Card className="border-yellow-200 shadow-lg">
-                <CardHeader>
-                  <MapPinIcon className="h-12 w-12 text-yellow-500 mb-4" />
-                  <CardTitle className="text-yellow-600">Local Focus</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-gray-600">
-                    Find electrical opportunities in your local area with our location-based matching system.
-                  </CardDescription>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </section>
-
-        {/* How It Works Section */}
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-white">
-          <div className="container px-4 md:px-6">
-            <div className="flex flex-col items-center justify-center space-y-4 text-center">
-              <div className="space-y-2">
-                <div className="inline-block rounded-lg bg-yellow-100 px-3 py-1 text-sm text-yellow-800">
+                <div className="inline-block rounded-lg bg-yellow-100 px-3 py-1 text-sm dark:bg-yellow-800/30">
                   How It Works
                 </div>
-                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-gray-900">
-                  Simple Steps to Build Your Electrical Crew
-                </h2>
-                <p className="max-w-[900px] text-gray-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  Whether you're an electrical shop looking for talent or an electrical apprentice seeking
-                  opportunities, Crew Solutions makes connections easy.
+                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl">Simple Process, Powerful Results</h2>
+                <p className="max-w-[900px] text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed dark:text-gray-400">
+                  Our platform makes it easy for both shops and apprentices to connect and work together.
                 </p>
               </div>
             </div>
-            <div className="mx-auto grid max-w-5xl items-start gap-8 py-12 sm:grid-cols-2 lg:grid-cols-3">
-              <Card className="flex flex-col items-center p-6 text-center border-yellow-200 shadow-lg">
-                <div className="rounded-full bg-yellow-100 p-4 mb-4">
-                  <CheckCircleIcon className="h-12 w-12 text-yellow-500" />
-                </div>
-                <CardTitle className="text-yellow-600 mb-2">1. Sign Up</CardTitle>
-                <CardDescription className="text-gray-600">
-                  Create your profile as an electrical shop or an electrical apprentice.
-                </CardDescription>
-              </Card>
-              <Card className="flex flex-col items-center p-6 text-center border-yellow-200 shadow-lg">
-                <div className="rounded-full bg-yellow-100 p-4 mb-4">
-                  <BriefcaseIcon className="h-12 w-12 text-yellow-500" />
-                </div>
-                <CardTitle className="text-yellow-600 mb-2">2. Post or Browse Electrical Jobs</CardTitle>
-                <CardDescription className="text-gray-600">
-                  Electrical shops post projects, apprentices find matching opportunities.
-                </CardDescription>
-              </Card>
-              <Card className="flex flex-col items-center p-6 text-center border-yellow-200 shadow-lg">
-                <div className="rounded-full bg-yellow-100 p-4 mb-4">
-                  <StarIcon className="h-12 w-12 text-yellow-500" />
-                </div>
-                <CardTitle className="text-yellow-600 mb-2">3. Connect & Collaborate</CardTitle>
-                <CardDescription className="text-gray-600">
-                  Electrical apprentices get hired, complete jobs, and build their reputation.
-                </CardDescription>
-              </Card>
+            <div className="mx-auto mt-12">
+              <Tabs defaultValue="shops" className="w-full max-w-4xl mx-auto">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="shops">For Electrical Shops</TabsTrigger>
+                  <TabsTrigger value="apprentices">For Apprentices</TabsTrigger>
+                </TabsList>
+                <TabsContent value="shops" className="mt-6">
+                  <div className="grid gap-6 md:grid-cols-3">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100 text-yellow-900 dark:bg-yellow-900/20 dark:text-yellow-400">
+                            1
+                          </div>
+                          <span>Create Profile</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Sign up and create your shop profile with details about your business.
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100 text-yellow-900 dark:bg-yellow-900/20 dark:text-yellow-400">
+                            2
+                          </div>
+                          <span>{"Select Apprentice"}</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {"Easily find the right apprentice based on skills, location, and availability.\n"}
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100 text-yellow-900 dark:bg-yellow-900/20 dark:text-yellow-400">
+                            3
+                          </div>
+                          <span>We Handle the Rest</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Once matched, we handle all payroll, insurance, and administrative tasks.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+                <TabsContent value="apprentices" className="mt-6">
+                  <div className="grid gap-6 md:grid-cols-3">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100 text-yellow-900 dark:bg-yellow-900/20 dark:text-yellow-400">
+                            1
+                          </div>
+                          <span>Create Profile</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Sign up and create your profile with your skills, certifications, and career goals.
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100 text-yellow-900 dark:bg-yellow-900/20 dark:text-yellow-400">
+                            2
+                          </div>
+                          <span>Complete Assessment</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Take our skill assessment to verify your knowledge and showcase your abilities.
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100 text-yellow-900 dark:bg-yellow-900/20 dark:text-yellow-400">
+                            3
+                          </div>
+                          <span>Get Matched</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Get matched with local electrical shops and start building your career with benefits.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+              </Tabs>
             </div>
           </div>
         </section>
 
-        {/* Featured Apprentices Section */}
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-yellow-50">
+        <section id="testimonials" className="w-full py-12 md:py-24 lg:py-32">
           <div className="container px-4 md:px-6">
             <div className="flex flex-col items-center justify-center space-y-4 text-center">
               <div className="space-y-2">
-                <div className="inline-block rounded-lg bg-yellow-200 px-3 py-1 text-sm text-yellow-800">
-                  Featured Electrical Apprentices
-                </div>
-                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-gray-900">
-                  Meet Our Top Electrical Talent
-                </h2>
-                <p className="max-w-[900px] text-gray-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  Browse highly-rated electrical apprentices ready for their next project.
-                </p>
-              </div>
-            </div>
-            <div className="relative mx-auto max-w-6xl py-12">
-              <Carousel
-                opts={{
-                  align: "start",
-                  loop: true,
-                }}
-                className="w-full"
-              >
-                <CarouselContent className="-ml-4">
-                  {apprenticeProfiles.map((apprentice) => (
-                    <CarouselItem key={apprentice.id} className="pl-4 md:basis-1/2 lg:basis-1/3">
-                      <Card className="h-full overflow-hidden rounded-lg shadow-lg transition-all hover:shadow-xl border-yellow-200">
-                        <CardContent className="flex flex-col items-center p-6 text-center">
-                          <Avatar className="mb-4 h-24 w-24">
-                            <AvatarImage alt={apprentice.name} src={apprentice.profileImage || "/placeholder.svg"} />
-                            <AvatarFallback className="bg-yellow-100 text-yellow-600">
-                              {apprentice.name
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")}
-                            </AvatarFallback>
-                          </Avatar>
-                          <CardTitle className="text-xl font-bold text-gray-900">{apprentice.name}</CardTitle>
-                          <CardDescription className="text-gray-600">{apprentice.title}</CardDescription>
-                          <div className="mt-2 flex items-center gap-1 text-sm text-gray-600">
-                            <StarIcon className="h-4 w-4 text-yellow-500 fill-current" />
-                            <span>
-                              {apprentice.rating.toFixed(1)} ({apprentice.jobsCompleted} jobs)
-                            </span>
-                          </div>
-                          <Separator className="my-4 w-full" />
-                          <div className="grid w-full gap-2 text-sm text-gray-700">
-                            <div className="flex items-center gap-2">
-                              <MapPinIcon className="h-4 w-4 text-yellow-500" />
-                              <span>{apprentice.location}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <BriefcaseIcon className="h-4 w-4 text-yellow-500" />
-                              <span>{apprentice.experience}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <GraduationCapIcon className="h-4 w-4 text-yellow-500" />
-                              <span>{apprentice.education}</span>
-                            </div>
-                          </div>
-                          <Separator className="my-4 w-full" />
-                          <div className="flex flex-wrap justify-center gap-2">
-                            {apprentice.skills.map((skill, index) => (
-                              <Badge key={index} variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">
-                                {skill}
-                              </Badge>
-                            ))}
-                          </div>
-                          <p className="mt-4 text-sm text-gray-600 line-clamp-3">{apprentice.bio}</p>
-                          <Button asChild className="mt-6 w-full bg-yellow-500 hover:bg-yellow-600">
-                            <Link href={`/apprentice/${apprentice.id}`}>View Profile</Link>
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    </CarouselItem>
-                  ))}
-                </CarouselContent>
-                <CarouselPrevious className="text-yellow-600 border-yellow-300" />
-                <CarouselNext className="text-yellow-600 border-yellow-300" />
-              </Carousel>
-            </div>
-          </div>
-        </section>
-
-        {/* Testimonials Section */}
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-white">
-          <div className="container px-4 md:px-6">
-            <div className="flex flex-col items-center justify-center space-y-4 text-center">
-              <div className="space-y-2">
-                <div className="inline-block rounded-lg bg-yellow-100 px-3 py-1 text-sm text-yellow-800">
+                <div className="inline-block rounded-lg bg-yellow-100 px-3 py-1 text-sm dark:bg-yellow-800/30">
                   Testimonials
                 </div>
-                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-gray-900">
-                  What Our Electrical Users Say
-                </h2>
-                <p className="max-w-[900px] text-gray-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  Hear from electrical shops and apprentices who have found success through Crew Solutions.
+                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl">Success Stories</h2>
+                <p className="max-w-[900px] text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed dark:text-gray-400">
+                  Hear from shops and apprentices who have found success with Crew Solutions.
                 </p>
               </div>
             </div>
-            <div className="mx-auto grid max-w-5xl items-start gap-8 py-12 lg:grid-cols-3">
-              {testimonials.map((testimonial, index) => (
-                <Card key={index} className="border-yellow-200 shadow-lg">
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-1 mb-4">
-                      {[...Array(testimonial.rating)].map((_, i) => (
-                        <StarIcon key={i} className="h-4 w-4 text-yellow-500 fill-current" />
-                      ))}
+            <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-2 mt-12">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-4">
+                    <img
+                      src="/placeholder.svg?height=60&width=60"
+                      alt="Mike Johnson"
+                      className="rounded-full h-12 w-12 object-cover"
+                      width={60}
+                      height={60}
+                    />
+                    <div>
+                      <CardTitle className="text-lg">Mike Johnson</CardTitle>
+                      <CardDescription>Owner, Johnson Electric - Palo Alto</CardDescription>
                     </div>
-                    <p className="text-gray-600 mb-4">"{testimonial.content}"</p>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={testimonial.avatar || "/placeholder.svg"} alt={testimonial.name} />
-                        <AvatarFallback className="bg-yellow-100 text-yellow-600">
-                          {testimonial.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-semibold text-gray-900">{testimonial.name}</p>
-                        <p className="text-sm text-gray-600">{testimonial.role}</p>
-                      </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-500 dark:text-gray-400">
+                    "Crew Solutions has transformed how I find and manage apprentices. The administrative support alone
+                    has saved me countless hours, and the quality of candidates has been exceptional."
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-4">
+                    <img
+                      src="/placeholder.svg?height=60&width=60"
+                      alt="Sarah Martinez"
+                      className="rounded-full h-12 w-12 object-cover"
+                      width={60}
+                      height={60}
+                    />
+                    <div>
+                      <CardTitle className="text-lg">Sarah Martinez</CardTitle>
+                      <CardDescription>Electrical Apprentice - San Jose</CardDescription>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-500 dark:text-gray-400">
+                    "Finding an apprenticeship was a struggle until I discovered Crew Solutions. Within two weeks, I was
+                    matched with a great local shop where I'm gaining valuable experience while receiving benefits."
+                  </p>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </section>
 
-        {/* Contact Section */}
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-yellow-50">
+        <section className="w-full py-12 md:py-24 lg:py-32 bg-yellow-500 text-black">
           <div className="container px-4 md:px-6">
             <div className="flex flex-col items-center justify-center space-y-4 text-center">
               <div className="space-y-2">
-                <div className="inline-block rounded-lg bg-yellow-200 px-3 py-1 text-sm text-yellow-800">
-                  Contact Us
-                </div>
-                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-gray-900">Get in Touch</h2>
-                <p className="max-w-[900px] text-gray-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  Have questions? We're here to help you succeed in the electrical industry.
+                <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">
+                  Ready to Transform Your Hiring?
+                </h2>
+                <p className="max-w-[900px] md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+                  Join Crew Solutions today and experience the difference for your electrical business or apprenticeship
+                  journey.
                 </p>
               </div>
-            </div>
-            <div className="mx-auto grid max-w-5xl items-start gap-8 py-12 lg:grid-cols-2">
-              <Card className="border-yellow-200 shadow-lg">
-                <CardHeader>
-                  <CardTitle className="text-yellow-600">Contact Information</CardTitle>
-                  <CardDescription className="text-gray-600">
-                    Reach out to us through any of these channels
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Phone className="h-5 w-5 text-yellow-500" />
-                    <span className="text-gray-700">(555) 123-4567</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Mail className="h-5 w-5 text-yellow-500" />
-                    <span className="text-gray-700">support@crewsolutions.com</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <MapPin className="h-5 w-5 text-yellow-500" />
-                    <span className="text-gray-700">123 Trade Street, San Francisco, CA 94102</span>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="border-yellow-200 shadow-lg">
-                <CardHeader>
-                  <CardTitle className="text-yellow-600">Send us a Message</CardTitle>
-                  <CardDescription className="text-gray-600">We'll get back to you within 24 hours</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Input placeholder="First Name" className="border-yellow-200 focus:border-yellow-500" />
-                      </div>
-                      <div>
-                        <Input placeholder="Last Name" className="border-yellow-200 focus:border-yellow-500" />
-                      </div>
-                    </div>
-                    <Input placeholder="Email" type="email" className="border-yellow-200 focus:border-yellow-500" />
-                    <Input placeholder="Subject" className="border-yellow-200 focus:border-yellow-500" />
-                    <Textarea placeholder="Message" className="border-yellow-200 focus:border-yellow-500" rows={4} />
-                    <Button className="w-full bg-yellow-500 hover:bg-yellow-600">Send Message</Button>
-                  </form>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </section>
-
-        {/* CTA Section */}
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-white">
-          <div className="container grid items-center gap-6 px-4 md:px-6 lg:grid-cols-2 lg:gap-10">
-            <div className="space-y-2">
-              <h2 className="text-3xl font-bold tracking-tighter md:text-4xl/tight text-gray-900">
-                Ready to Build Your Electrical Crew or Start Your Electrical Career?
-              </h2>
-              <p className="max-w-[600px] text-gray-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                Sign up today and discover the future of the electrical trade.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 min-[400px]:flex-row lg:justify-end">
-              <Button asChild className="bg-yellow-500 hover:bg-yellow-600">
-                <Link href="/signup?type=shop">Join as an Electrical Shop</Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 bg-transparent"
-              >
-                <Link href="/signup?type=apprentice">Join as an Electrical Apprentice</Link>
-              </Button>
+              <div className="flex flex-col gap-2 min-[400px]:flex-row">
+                <Button size="lg" className="bg-black hover:bg-gray-800 text-white" asChild>
+                  <Link href="/signup">Sign Up Now</Link>
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-black text-black hover:bg-yellow-400 bg-transparent"
+                >
+                  Request a Demo
+                </Button>
+              </div>
             </div>
           </div>
         </section>
       </main>
-
-      <footer className="flex flex-col gap-2 sm:flex-row py-6 w-full shrink-0 items-center px-4 md:px-6 border-t border-yellow-200 bg-yellow-50">
-        <p className="text-xs text-gray-600">Copyright 2024 Crew Solutions. All rights reserved.</p>
-        <nav className="sm:ml-auto flex gap-4 sm:gap-6">
-          <Link
-            className="text-xs hover:underline underline-offset-4 text-gray-600 hover:text-yellow-600"
-            href="/terms"
-          >
-            Terms of Service
-          </Link>
-          <Link
-            className="text-xs hover:underline underline-offset-4 text-gray-600 hover:text-yellow-600"
-            href="/privacy"
-          >
-            Privacy
-          </Link>
-        </nav>
+      <footer id="contact" className="w-full py-12 md:py-24 border-t">
+        <div className="container px-4 md:px-6">
+          <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Zap className="h-6 w-6 text-yellow-500" />
+                <span className="text-xl font-bold">Crew Solutions</span>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Connecting electrical shops with vetted apprentices while handling all the administrative overhead.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Platform</h3>
+              <ul className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
+                <li>
+                  <Link href="#" className="hover:underline">
+                    For Shops
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:underline">
+                    For Apprentices
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:underline">
+                    How It Works
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:underline">
+                    Pricing
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Company</h3>
+              <ul className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
+                <li>
+                  <Link href="#" className="hover:underline">
+                    About Us
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:underline">
+                    Blog
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:underline">
+                    Careers
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:underline">
+                    Contact
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Contact Us</h3>
+              <ul className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
+                <li>
+                  <Link href="mailto:info@crewsolutions.com" className="hover:underline">
+                    info@crewsolutions.work
+                  </Link>
+                </li>
+                <li>
+                  <Link href="tel:+1234567890" className="hover:underline">
+                    {""}
+                  </Link>
+                </li>
+                <li>{""}</li>
+                <li>{""}</li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-10 border-t pt-6 flex flex-col md:flex-row justify-between items-center">
+            <p className="text-xs text-gray-500 dark:text-gray-400">© 2025 Crew Solutions, LLC. All rights reserved.</p>
+            <div className="flex gap-4 mt-4 md:mt-0">
+              <Link href="#" className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+                Terms
+              </Link>
+              <Link href="#" className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+                Privacy
+              </Link>
+              <Link href="#" className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+                Cookies
+              </Link>
+            </div>
+          </div>
+        </div>
       </footer>
     </div>
   )
